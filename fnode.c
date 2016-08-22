@@ -1,42 +1,48 @@
 /*
     ----------------- TODO LIST -----------------
     - Add properties
-    - Create main node
-    
+    - Add compiling shader operators
 */
 
 // Includes
 #include <stdlib.h>         // Required for: malloc(), free(), atof()
 #include <stdio.h>          // Required for: fprintf(), sprintf()
+#include <string.h>         // Required for: strcat()
 #include <math.h>           // Required for: cos(), sin(), tan(), sqrt(), pow(), floor()
 #include <stdarg.h>         // Required for: va_list, va_start(), vfprintf(), va_end()
 #include <raylib.h>         // Required for window management, 2D camera drawing and inputs detection
 
 // Defines
-#define     MAX_INPUTS                  8               // Max number of inputs in every node
-#define     MAX_VALUES                  16              // Max number of values in every output
-#define     MAX_NODES                   256             // Max number of nodes
-#define     MAX_NODE_LENGTH             16              // Max node output data value text length
-#define     MAX_LINES                   2048            // Max number of lines (8 lines for each node)
-#define     MAX_COMMENTS                64              // Max number of comments
-#define     MAX_COMMENT_LENGTH          20              // Max comment value text length
-#define     MIN_COMMENT_SIZE            75              // Min comment width and height values
-#define     NODE_LINE_DIVISIONS         20              // Node curved line divisions
-#define     NODE_DATA_WIDTH             30              // Node data text width
-#define     NODE_DATA_HEIGHT            30              // Node data text height
-#define     UI_PADDING                  5               // Interface bounds padding with background
-#define     UI_BUTTON_HEIGHT            30              // Interface bounds height
-#define     UI_SCROLL                   20              // Interface scroll sensitivity
-#define     UI_GRID_SPACING             25              // Interface canvas background grid divisions length
-#define     UI_GRID_ALPHA               0.25f           // Interface canvas background grid lines alpha
-#define     UI_GRID_COUNT               100             // Interface canvas background grid divisions count
-#define     UI_COMMENT_WIDTH            220             // Interface comment text box width
-#define     UI_COMMENT_HEIGHT           25              // Interface comment text box height
-#define     UI_BUTTON_DEFAULT_COLOR     LIGHTGRAY       // Interface button background color
-#define     UI_BORDER_DEFAULT_COLOR     125             // Interface button border color
+#define     MAX_INPUTS                  4                       // Max number of inputs in every node
+#define     MAX_VALUES                  16                      // Max number of values in every output
+#define     MAX_NODES                   128                     // Max number of nodes
+#define     MAX_NODE_LENGTH             16                      // Max node output data value text length
+#define     MAX_LINES                   512                     // Max number of lines (8 lines for each node)
+#define     MAX_COMMENTS                16                      // Max number of comments
+#define     MAX_COMMENT_LENGTH          20                      // Max comment value text length
+#define     MIN_COMMENT_SIZE            75                      // Min comment width and height values
+#define     NODE_LINE_DIVISIONS         20                      // Node curved line divisions
+#define     NODE_DATA_WIDTH             30                      // Node data text width
+#define     NODE_DATA_HEIGHT            30                      // Node data text height
+#define     UI_PADDING                  5                       // Interface bounds padding with background
+#define     UI_PADDING_SCROLL           20                      // Interface scroll bar padding
+#define     UI_BUTTON_HEIGHT            30                      // Interface bounds height
+#define     UI_SCROLL                   20                      // Interface scroll sensitivity
+#define     UI_GRID_SPACING             25                      // Interface canvas background grid divisions length
+#define     UI_GRID_ALPHA               0.25f                   // Interface canvas background grid lines alpha
+#define     UI_GRID_COUNT               100                     // Interface canvas background grid divisions count
+#define     UI_COMMENT_WIDTH            220                     // Interface comment text box width
+#define     UI_COMMENT_HEIGHT           25                      // Interface comment text box height
+#define     UI_BUTTON_DEFAULT_COLOR     LIGHTGRAY               // Interface button background color
+#define     UI_BORDER_DEFAULT_COLOR     125                     // Interface button border color
+#define     VISOR_BORDER                2                       // Visor window border width
+#define     VISOR_MODEL_ROTATION        0.1f                    // Visor model rotation speed
 
-#define     FNODE_MALLOC(size)          malloc(size)    // Memory allocation function as define
-#define     FNODE_FREE(ptr)             free(ptr)       // Memory deallocation function as define
+#define     FNODE_MALLOC(size)          malloc(size)            // Memory allocation function as define
+#define     FNODE_FREE(ptr)             free(ptr)               // Memory deallocation function as define
+
+#define     VERTEX_PATH                 "output/vertex.vs"      // Vertex shader output path
+#define     FRAGMENT_PATH               "output/fragment.fs"    // Fragment shader output path
 
 // Enums
 typedef enum {
@@ -85,7 +91,8 @@ typedef enum {
     FNODE_MULTIPLYMATRIX,
     FNODE_TRANSPOSE,
     FNODE_PROJECTION,
-    FNODE_REJECTION
+    FNODE_REJECTION,
+    FNODE_MAIN
 } FNodeType;
 
 typedef enum {
@@ -181,13 +188,24 @@ Vector2 mousePosition = { 0, 0 };           // Current mouse position
 Vector2 lastMousePosition = { 0, 0 };       // Previous frame mouse position
 Vector2 mouseDelta = { 0, 0 };              // Current frame mouse position increment since previous frame
 Vector2 currentOffset = { 0, 0 };           // Current selected node offset between mouse position and node shape
+float modelRotation = 0.0f;                 // Current model visualization rotation angle
+int scrollState = 0;                        // Current mouse drag interface scroll state
 
 bool debugMode = false;                     // Drawing debug information state
 Camera2D camera;                            // Node area 2d camera for panning
+Camera camera3d;                            // Visor camera 3d for model and shader visualization
 Vector2 canvasSize;                         // Interface screen size
 float menuScroll = 10.0f;                   // Current interface scrolling amount
 Vector2 scrollLimits = { 10, 1070 };        // Interface scrolling limits
+Rectangle menuScrollRec = { 0, 0, 0, 0 };   // Interface scroll rectangle bounds
+Vector2 menuScrollLimits = { 5, 685 };      // Interface scroll rectangle position limits
+Rectangle canvasScroll = { 0, 0, 0, 0 };    // Interface scroll rectangle bounds
 int menuOffset = 0;                         // Interface elements position current offset
+Model model;                                // Visor default model for shader visualization
+RenderTexture2D visorTarget;                // Visor model visualization render target
+Shader shader;                              // Visor model shader
+Shader fxaa;                                // Canvas and visor anti-aliasing postprocessing shader
+int fxaaUniform = -1;                       // FXAA shader viewport size uniform location point
 
 // Functions declarations
 void UpdateMouseData();                     // Updates current mouse position and delta position
@@ -200,12 +218,15 @@ void UpdateCommentCreationEdit();           // Check comment creation and shape 
 void UpdateCommentsDrag();                  // Check comment drag input
 void UpdateCommentsEdit();                  // Check comment text edit input
 void CalculateValues();                     // Calculates nodes output values based on current inputs
+void CompileNodes();                        // Compiles all node structure to create the GLSL fragment shader in output folder
+void CompileNode(FNode node, FILE *file);   // Compiles a specific node checking its inputs and writing current node operation in shader
 void AlignNode(FNode node);                 // Aligns a node to the nearest grid intersection
 void AlignAllNodes();                       // Aligns all created nodes
 void ClearUnusedNodes();                    // Destroys all unused nodes
 void ClearGraph();                          // Destroys all created nodes and its linked lines
 void DrawCanvas();                          // Draw canvas space to create nodes
 void DrawCanvasGrid(int divisions);         // Draw canvas grid with a specific number of divisions for horizontal and vertical lines
+void DrawVisor();                           // Draws a visor with default model rotating and current shader
 void DrawInterface();                       // Draw interface to create nodes
 
 Vector2 CameraToViewVector2(Vector2 vector, Camera2D camera);   // Converts Vector2 coordinates from world space to Camera2D space based on its offset
@@ -221,7 +242,8 @@ FNode CreateNodeValue(float value);                                         // C
 FNode CreateNodeVector2(Vector2 vector);                                    // Creates a Vector2 node (2 float)
 FNode CreateNodeVector3(Vector3 vector);                                    // Creates a Vector3 node (3 float)
 FNode CreateNodeVector4(Vector4 vector);                                    // Creates a Vector4 node (4 float)
-FNode CreateNodeOperator(FNodeType type, const char *name, int inputs);     // Creates an operator node with type name and inputs limit as parameters
+FNode CreateNodeOperator(FNodeType type, const char *name, int inputs);     // Creates an operator node with type name and inputs limit as parametersç
+FNode CreateNodeMain();                                                     // Creates the main node that contains final fragment color
 FNode InitializeNode(bool isOperator);                                      // Initializes a new node with generic parameters
 int GetNodeIndex(int id);                                                   // Returns the index of a node searching by its id
 FLine CreateNodeLine();                                                     // Creates a line between two nodes
@@ -280,20 +302,35 @@ float FEaseInOutQuad(float t, float b, float c, float d);       // Returns an ea
 // FNODE string functions declarations
 void FStringToFloat(float *pointer, const char *string);        // Sends a float conversion value of a string to an initialized float pointer
 void FFloatToString(char *buffer, float value);                 // Sends formatted output to an initialized string pointer
+bool FSearch(char *filename, char *string);                     // Returns true if a specific string is found in a text file
 
 int main()
-{       
+{
     // Initialization
     //--------------------------------------------------------------------------------------
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
-    InitWindow(screenSize.x, screenSize.y, "fnode 0.3");
+    InitWindow(screenSize.x, screenSize.y, "fnode 0.5");
     SetTargetFPS(60);
     SetLineWidth(3);
-    
+
+    // Load resources
+    model = LoadModel("res/model.obj");
+    visorTarget = LoadRenderTexture(screenSize.x/4, screenSize.y/4);
+    fxaa = LoadShader("res/fxaa.vs", "res/fxaa.fs");
+    fxaaUniform = GetShaderLocation(fxaa, "viewportSize");
+    float viewportSize[2] = { screenSize.x/4, screenSize.y/4 };
+    SetShaderValue(fxaa, fxaaUniform, viewportSize, 2);
+
     // Initialize values
     camera = (Camera2D){ (Vector2){ 0, 0 }, (Vector2){ screenSize.x/2, screenSize.y/2 }, 0.0f, 1.0f };
     canvasSize = (Vector2){ screenSize.x*0.85f, screenSize.y };
-    
+    camera3d = (Camera){{ 0.0f, 0.0f, 4.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, 45.0f };
+    menuScrollRec = (Rectangle){ screenSize.x - 19, 5, 11, 30 };
+
+    // Setup orbital camera
+    SetCameraPosition(camera3d.position);     // Set internal camera position to match our camera position
+    SetCameraTarget(camera3d.target);         // Set internal camera target to match our camera target
+
     InitFNode();
     //--------------------------------------------------------------------------------------
 
@@ -311,7 +348,7 @@ int main()
         UpdateCommentCreationEdit();
         UpdateCommentsEdit();
         UpdateCommentsDrag();
-        
+
         if (IsKeyPressed('P')) debugMode = !debugMode;
         //----------------------------------------------------------------------------------
 
@@ -320,17 +357,24 @@ int main()
         BeginDrawing();
 
             ClearBackground(RAYWHITE);
-            
+
             DrawCanvas();
-            
+
             DrawInterface();
             
+            DrawVisor();
+
         EndDrawing();
         //----------------------------------------------------------------------------------
     }
 
     // De-Initialization
     //--------------------------------------------------------------------------------------
+    UnloadModel(model);
+    UnloadShader(shader);
+    UnloadRenderTexture(visorTarget);
+    UnloadShader(fxaa);
+
     CloseFNode();
     CloseWindow();        // Close window and OpenGL context
     //--------------------------------------------------------------------------------------
@@ -352,8 +396,9 @@ void UpdateCanvas()
 {
     // Update canvas camera values
     camera.target = mousePosition;
-    camera.offset.x += mouseDelta.x*(camera.zoom - 1);
-    camera.offset.y += mouseDelta.y*(camera.zoom - 1);
+    
+    // Update visor model current rotation
+    modelRotation -= VISOR_MODEL_ROTATION;
 }
 
 // Updates mouse scrolling for menu and canvas drag
@@ -362,7 +407,12 @@ void UpdateScroll()
     // Check zoom input
     if (GetMouseWheelMove() != 0)
     {
-        if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, canvasSize.x, canvasSize.y }))
+        if (CheckCollisionPointRec(mousePosition, (Rectangle){ canvasSize.x - visorTarget.texture.width - UI_PADDING, screenSize.y - visorTarget.texture.height - UI_PADDING, visorTarget.texture.width, visorTarget.texture.height }))
+        {
+            camera3d.position.z += GetMouseWheelMove()*0.25f;
+            camera3d.position.z = FClamp(camera3d.position.z, 2.5f, 6.0f);
+        }
+        else if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, canvasSize.x, canvasSize.y }))
         {
             if (IsKeyDown(KEY_LEFT_ALT)) camera.offset.x -= GetMouseWheelMove()*UI_SCROLL;
             else camera.offset.y -= GetMouseWheelMove()*UI_SCROLL;
@@ -371,7 +421,32 @@ void UpdateScroll()
         {
             menuScroll -= GetMouseWheelMove()*UI_SCROLL;
             menuScroll = FClamp(menuScroll, scrollLimits.x, scrollLimits.y);
+            menuScrollRec.y = (menuScrollLimits.y - menuScrollLimits.x)*menuScroll/(scrollLimits.y - scrollLimits.x);
         }
+    }
+    
+    // Check mouse drag interface scrolling input
+    if (scrollState == 0)
+    {
+        if ((IsMouseButtonDown(MOUSE_LEFT_BUTTON)) && (CheckCollisionPointRec(mousePosition, menuScrollRec))) scrollState = 1;
+    }
+    else
+    {
+        menuScroll += mouseDelta.y*1.55f;
+        menuScrollRec.y += mouseDelta.y;
+        
+        if (menuScrollRec.y >= menuScrollLimits.y)
+        {
+            menuScroll = scrollLimits.y;
+            menuScrollRec.y = menuScrollLimits.y;
+        }
+        else if (menuScrollRec.y <= menuScrollLimits.x)
+        {
+            menuScroll = scrollLimits.x;
+            menuScrollRec.y = menuScrollLimits.x;
+        }
+
+        if (IsMouseButtonUp(MOUSE_LEFT_BUTTON)) scrollState = 0;
     }
 }
 
@@ -397,7 +472,7 @@ void UpdateNodesEdit()
                 }
             }
         }
-        
+
         if (index != -1)
         {
             if ((editNode == -1) && (selectedNode == -1) && (lineState == 0) && (commentState == 0) && (selectedComment == -1) && (editSize == -1) && (editSizeType == -1) && (editComment == -1))
@@ -419,10 +494,10 @@ void UpdateNodesEdit()
                             for (int k = 0; k < MAX_NODE_LENGTH; k++) nodes[i]->output.data[editNodeType].valueText[k] = editNodeText[k];
                         }
                     }
-                    
+
                     editNode = nodes[index]->id;
                     editNodeType = data;
-                    
+
                     for (int i = 0; i < MAX_NODE_LENGTH; i++) editNodeText[i] = nodes[index]->output.data[data].valueText[i];
                 }
             }
@@ -436,7 +511,7 @@ void UpdateNodesEdit()
                     for (int k = 0; k < MAX_NODE_LENGTH; k++) nodes[i]->output.data[editNodeType].valueText[k] = editNodeText[k];
                 }
             }
-            
+
             editNode = -1;
             editNodeType = -1;
             FNODE_FREE(editNodeText);
@@ -462,8 +537,8 @@ void UpdateNodesDrag()
                     break;
                 }
             }
-            
-            if ((selectedNode == -1) && (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x, screenSize.y })))
+
+            if ((selectedNode == -1) && (scrollState == 0) && (!CheckCollisionPointRec(mousePosition, (Rectangle){ canvasSize.x, 0, (screenSize.x - canvasSize.x), screenSize.y })))
             {
                 camera.offset.x += mouseDelta.x;
                 camera.offset.y += mouseDelta.y;
@@ -473,7 +548,7 @@ void UpdateNodesDrag()
         {
             for (int i = nodesCount - 1; i >= 0; i--)
             {
-                if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->shape, camera)))
+                if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->shape, camera)) && (nodes[i]->type != FNODE_MAIN))
                 {
                     DestroyNode(nodes[i]);
                     CalculateValues();
@@ -490,15 +565,15 @@ void UpdateNodesDrag()
             {
                 nodes[i]->shape.x = mousePosition.x - currentOffset.x;
                 nodes[i]->shape.y = mousePosition.y - currentOffset.y;
-                
+
                 // Check aligned drag movement input
                 if (IsKeyDown(KEY_LEFT_ALT)) AlignNode(nodes[i]);
-                
+
                 UpdateNodeShapes(nodes[i]);
                 break;
             }
         }
-        
+
         if (IsMouseButtonUp(MOUSE_LEFT_BUTTON)) selectedNode = -1;
     }
 }
@@ -534,7 +609,7 @@ void UpdateNodesLink()
                             {
                                 if (nodes[i]->id == lines[k]->from) DestroyNodeLine(lines[k]);
                             }
-                            
+
                             CalculateValues();
                             CalculateValues();
                             break;
@@ -545,7 +620,7 @@ void UpdateNodesLink()
                             {
                                 if (nodes[i]->id == lines[k]->to) DestroyNodeLine(lines[k]);
                             }
-                            
+
                             CalculateValues();
                             CalculateValues();
                             break;
@@ -561,83 +636,79 @@ void UpdateNodesLink()
                     {
                         if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->inputShape, camera)) && (nodes[i]->id != tempLine->from) && (nodes[i]->inputsCount < nodes[i]->inputsLimit))
                         {
-                            
                             // Get which index has the first input node id from current nude                            
                             int indexFrom = GetNodeIndex(tempLine->from);
-                            
-                            if (indexFrom != -1)
+
+                            bool valuesCheck = true;
+                            if (nodes[i]->type == FNODE_APPEND) valuesCheck = (nodes[i]->output.dataCount + nodes[indexFrom]->output.dataCount <= 4);
+                            else if ((nodes[i]->type == FNODE_POWER) && (nodes[i]->inputsCount == 1)) valuesCheck = (nodes[indexFrom]->output.dataCount == 1);
+                            else if (nodes[i]->type == FNODE_STEP) valuesCheck = (nodes[indexFrom]->output.dataCount == 1);
+                            else if (nodes[i]->type == FNODE_NOISE) valuesCheck = (nodes[indexFrom]->output.dataCount == 2);
+                            else if (nodes[i]->type == FNODE_NORMALIZE) valuesCheck = ((nodes[indexFrom]->output.dataCount > 1) && (nodes[indexFrom]->output.dataCount <= 4));
+                            else if (nodes[i]->type == FNODE_CROSSPRODUCT) valuesCheck = (nodes[indexFrom]->output.dataCount == 3);
+                            else if (nodes[i]->type == FNODE_DESATURATE)
                             {
-                                bool valuesCheck = true;
-                                if (nodes[i]->type == FNODE_APPEND) valuesCheck = (nodes[i]->output.dataCount + nodes[indexFrom]->output.dataCount <= 4);
-                                else if ((nodes[i]->type == FNODE_POWER) && (nodes[i]->inputsCount == 1)) valuesCheck = (nodes[indexFrom]->output.dataCount == 1);
-                                else if (nodes[i]->type == FNODE_STEP) valuesCheck = (nodes[indexFrom]->output.dataCount == 1);
-                                else if (nodes[i]->type == FNODE_NOISE) valuesCheck = (nodes[indexFrom]->output.dataCount == 2);
-                                else if (nodes[i]->type == FNODE_NORMALIZE) valuesCheck = ((nodes[indexFrom]->output.dataCount > 1) && (nodes[indexFrom]->output.dataCount <= 4));
-                                else if (nodes[i]->type == FNODE_CROSSPRODUCT) valuesCheck = (nodes[indexFrom]->output.dataCount == 3);
-                                else if (nodes[i]->type == FNODE_DESATURATE)
-                                {
-                                    if (nodes[i]->inputsCount == 0) valuesCheck = (nodes[indexFrom]->output.dataCount < 4);
-                                    else if (nodes[i]->inputsCount == 1) valuesCheck = (nodes[indexFrom]->output.dataCount == 1);
-                                }
-                                else if ((nodes[i]->type == FNODE_DOTPRODUCT) || (nodes[i]->type == FNODE_LENGTH) || (nodes[i]->type == FNODE_PROJECTION) || (nodes[i]->type == FNODE_REJECTION))
-                                {
-                                    valuesCheck = ((nodes[indexFrom]->output.dataCount > 1) && (nodes[indexFrom]->output.dataCount <= 4));
-                                    
-                                    if (valuesCheck && (nodes[i]->inputsCount > 0))
-                                    {
-                                        int index = GetNodeIndex(nodes[i]->inputs[0]);
-                                        
-                                        if (index != -1) valuesCheck = (nodes[indexFrom]->output.dataCount == nodes[index]->output.dataCount);
-                                        else TraceLogFNode(true, "error when trying to get node inputs index");
-                                    }
-                                }
-                                else if (nodes[i]->type == FNODE_DISTANCE)
-                                {
-                                    valuesCheck = ((nodes[indexFrom]->output.dataCount <= 4));
-                                    
-                                    if (valuesCheck && (nodes[i]->inputsCount > 0))
-                                    {
-                                        int index = GetNodeIndex(nodes[i]->inputs[0]);
-                                        
-                                        if (index != -1) valuesCheck = (nodes[indexFrom]->output.dataCount == nodes[index]->output.dataCount);
-                                        else TraceLogFNode(true, "error when trying to get node inputs index");
-                                    }
-                                }
-                                else if ((nodes[i]->type == FNODE_MULTIPLYMATRIX) || (nodes[i]->type == FNODE_TRANSPOSE)) valuesCheck = (nodes[indexFrom]->output.dataCount == 16);
-                                else valuesCheck = (nodes[i]->output.dataCount == nodes[indexFrom]->output.dataCount);
-                                
-                                if (((nodes[i]->inputsCount == 0) && (nodes[i]->type != FNODE_NOISE) && (nodes[i]->type != FNODE_NORMALIZE) && (nodes[i]->type != FNODE_DOTPRODUCT) && 
-                                (nodes[i]->type != FNODE_LENGTH) && (nodes[i]->type != FNODE_MULTIPLYMATRIX) && (nodes[i]->type != FNODE_TRANSPOSE) && (nodes[i]->type != FNODE_PROJECTION) &&
-                                (nodes[i]->type != FNODE_DISTANCE) && (nodes[i]->type != FNODE_REJECTION)) || valuesCheck)
-                                {
-                                    // Check if there is already a line created with same linking ids
-                                    for (int k = 0; k < linesCount; k++)
-                                    {
-                                        if ((lines[k]->to == nodes[i]->id) && (lines[k]->from == tempLine->from))
-                                        {
-                                            DestroyNodeLine(lines[k]);
-                                            break;
-                                        }
-                                    }
-                                    
-                                    // Save temporal line values and destroy it
-                                    int from = tempLine->from;
-                                    int to = nodes[i]->id;
-                                    DestroyNodeLine(tempLine);
-                                    
-                                    // Create final node line
-                                    FLine temp = CreateNodeLine(from);
-                                    temp->to = to;
-                                    
-                                    // Reset linking state values
-                                    lineState = 0;
-                                    CalculateValues();
-                                    CalculateValues();
-                                    break;
-                                }
-                                else TraceLogFNode(false, "error trying to link node ID %i (length: %i) with node ID %i (length: %i)", nodes[i]->id, nodes[i]->output.dataCount, nodes[indexFrom]->id, nodes[indexFrom]->output.dataCount);
+                                if (nodes[i]->inputsCount == 0) valuesCheck = (nodes[indexFrom]->output.dataCount < 4);
+                                else if (nodes[i]->inputsCount == 1) valuesCheck = (nodes[indexFrom]->output.dataCount == 1);
                             }
-                            else TraceLogFNode(true, "(1) error trying to get inputs from node id %i due to index is out of bounds %i", nodes[i]->id, indexFrom);
+                            else if ((nodes[i]->type == FNODE_DOTPRODUCT) || (nodes[i]->type == FNODE_LENGTH) || (nodes[i]->type == FNODE_PROJECTION) || (nodes[i]->type == FNODE_REJECTION))
+                            {
+                                valuesCheck = ((nodes[indexFrom]->output.dataCount > 1) && (nodes[indexFrom]->output.dataCount <= 4));
+
+                                if (valuesCheck && (nodes[i]->inputsCount > 0))
+                                {
+                                    int index = GetNodeIndex(nodes[i]->inputs[0]);
+                                    
+                                    if (index != -1) valuesCheck = (nodes[indexFrom]->output.dataCount == nodes[index]->output.dataCount);
+                                    else TraceLogFNode(true, "error when trying to get node inputs index");
+                                }
+                            }
+                            else if (nodes[i]->type == FNODE_DISTANCE)
+                            {
+                                valuesCheck = ((nodes[indexFrom]->output.dataCount <= 4));
+
+                                if (valuesCheck && (nodes[i]->inputsCount > 0))
+                                {
+                                    int index = GetNodeIndex(nodes[i]->inputs[0]);
+                                    
+                                    if (index != -1) valuesCheck = (nodes[indexFrom]->output.dataCount == nodes[index]->output.dataCount);
+                                    else TraceLogFNode(true, "error when trying to get node inputs index");
+                                }
+                            }
+                            else if ((nodes[i]->type == FNODE_MULTIPLYMATRIX) || (nodes[i]->type == FNODE_TRANSPOSE)) valuesCheck = (nodes[indexFrom]->output.dataCount == 16);
+                            else if (nodes[i]->type == FNODE_MAIN) valuesCheck = (nodes[indexFrom]->output.dataCount == 4);
+                            else valuesCheck = (nodes[i]->output.dataCount == nodes[indexFrom]->output.dataCount);
+
+                            if (((nodes[i]->inputsCount == 0) && (nodes[i]->type != FNODE_NOISE) && (nodes[i]->type != FNODE_NORMALIZE) && (nodes[i]->type != FNODE_DOTPRODUCT) && 
+                            (nodes[i]->type != FNODE_LENGTH) && (nodes[i]->type != FNODE_MULTIPLYMATRIX) && (nodes[i]->type != FNODE_TRANSPOSE) && (nodes[i]->type != FNODE_PROJECTION) &&
+                            (nodes[i]->type != FNODE_DISTANCE) && (nodes[i]->type != FNODE_REJECTION) && (nodes[i]->type != FNODE_MAIN)) || valuesCheck)
+                            {
+                                // Check if there is already a line created with same linking ids
+                                for (int k = 0; k < linesCount; k++)
+                                {
+                                    if ((lines[k]->to == nodes[i]->id) && (lines[k]->from == tempLine->from))
+                                    {
+                                        DestroyNodeLine(lines[k]);
+                                        break;
+                                    }
+                                }
+
+                                // Save temporal line values and destroy it
+                                int from = tempLine->from;
+                                int to = nodes[i]->id;
+                                DestroyNodeLine(tempLine);
+
+                                // Create final node line
+                                FLine temp = CreateNodeLine(from);
+                                temp->to = to;
+
+                                // Reset linking state values
+                                lineState = 0;
+                                CalculateValues();
+                                CalculateValues();
+                                break;
+                            }
+                            else TraceLogFNode(false, "error trying to link node ID %i (length: %i) with node ID %i (length: %i)", nodes[i]->id, nodes[i]->output.dataCount, nodes[indexFrom]->id, nodes[indexFrom]->output.dataCount);
                         }
                     }
                 }
@@ -666,14 +737,14 @@ void UpdateCommentCreationEdit()
                     if (IsKeyDown(KEY_LEFT_ALT))
                     {
                         commentState = 1;
-                        
+
                         tempCommentPos.x = mousePosition.x;
                         tempCommentPos.y = mousePosition.y;
-                        
+
                         tempComment = CreateComment();
                         tempComment->shape.x = mousePosition.x - camera.offset.x;
                         tempComment->shape.y = mousePosition.y - camera.offset.y;
-                        
+
                         UpdateCommentShapes(tempComment);
                     }
                     else
@@ -788,12 +859,12 @@ void UpdateCommentCreationEdit()
                                 } break;
                                 default: break;
                             }
-                            
+
                             UpdateCommentShapes(comments[i]);
                             break;
                         }
                     }
-                    
+
                     if (IsMouseButtonUp(MOUSE_LEFT_BUTTON))
                     {
                         editSize = -1;
@@ -809,25 +880,25 @@ void UpdateCommentCreationEdit()
                         tempComment->shape.width = tempCommentPos.x - mousePosition.x;
                         tempComment->shape.x = tempCommentPos.x - tempComment->shape.width - camera.offset.x;
                     }
-                    
+
                     if ((mousePosition.y - tempCommentPos.y) >= 0) tempComment->shape.height = mousePosition.y - tempComment->shape.y - camera.offset.y;
                     else
                     {
                         tempComment->shape.height = tempCommentPos.y - mousePosition.y;
                         tempComment->shape.y = tempCommentPos.y - tempComment->shape.height - camera.offset.y;
                     }
-                       
+
                     UpdateCommentShapes(tempComment);
-                    
+
                     if (IsMouseButtonUp(MOUSE_LEFT_BUTTON))
                     {
                         // Save temporal comment values
                         Rectangle tempRec = { tempComment->shape.x, tempComment->shape.y, tempComment->shape.width, tempComment->shape.height };
                         DestroyComment(tempComment);
-                        
+
                         // Reset comment state
                         commentState = 0;
-                        
+
                         if (tempRec.width >= 0 && tempRec.height >= 0)
                         {
                             // Create final comment
@@ -860,7 +931,7 @@ void UpdateCommentsDrag()
                     {
                         selectedComment = comments[i]->id;
                         currentOffset = (Vector2){ mousePosition.x - comments[i]->shape.x, mousePosition.y - comments[i]->shape.y };
-                        
+
                         for (int k = 0; k < nodesCount; k++)
                         {
                             if (CheckCollisionRecs(CameraToViewRec(comments[i]->shape, camera), CameraToViewRec(nodes[k]->shape, camera)))
@@ -871,7 +942,7 @@ void UpdateCommentsDrag()
                                 if (selectedCommentNodesCount > MAX_NODES) break;
                             }
                         }
-                        
+
                         break;
                     }
                 }
@@ -897,9 +968,9 @@ void UpdateCommentsDrag()
             {
                 comments[i]->shape.x = mousePosition.x - currentOffset.x;
                 comments[i]->shape.y = mousePosition.y - currentOffset.y;
-                
+
                 UpdateCommentShapes(comments[i]);
-                
+
                 for (int k = 0; k < selectedCommentNodesCount; k++)
                 {
                     for (int j = 0; j < nodesCount; j++)
@@ -917,7 +988,7 @@ void UpdateCommentsDrag()
                 break;
             }
         }
-        
+
         if (IsMouseButtonUp(MOUSE_LEFT_BUTTON))
         {
             selectedComment = -1;
@@ -958,14 +1029,14 @@ void UpdateCommentsEdit()
                         break;
                     }
                 }
-                
+
                 if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->valueShape, camera)))
                 {
                     editComment = i;
                     break;
                 }
             }
-            
+
             // Reset current editing text any other text label is pressed
             if (!isCurrentText && (currentEdit == editComment)) editComment = -1;
         }
@@ -982,7 +1053,7 @@ void CalculateValues()
             // Reset node inputs values and inputs count
             for (int k = 0; k < MAX_INPUTS; k++) nodes[i]->inputs[k] = -1;
             nodes[i]->inputsCount = 0;
-            
+
             // Search for node inputs and calculate inputs count
             for (int k = 0; k < linesCount; k++)
             {
@@ -996,7 +1067,7 @@ void CalculateValues()
                     }
                 }
             }
-            
+
             // Check if current node is an operator
             if (nodes[i]->type > FNODE_VECTOR4 && nodes[i]->type < FNODE_APPEND)
             {
@@ -1006,42 +1077,34 @@ void CalculateValues()
                     // Get which index has the first input node id from current nude
                     int index = GetNodeIndex(nodes[i]->inputs[0]);
                     
-                    if (index != -1)
-                    {
-                        nodes[i]->output.dataCount = nodes[index]->output.dataCount;
-                        for (int k = 0; k < nodes[i]->output.dataCount; k++) nodes[i]->output.data[k].value = nodes[index]->output.data[k].value;
-                    }
-                    else TraceLogFNode(true, "(2) error trying to get inputs from node id %i due to index is out of bounds %i", nodes[i]->id, index);
-                    
+                    nodes[i]->output.dataCount = nodes[index]->output.dataCount;
+                    for (int k = 0; k < nodes[i]->output.dataCount; k++) nodes[i]->output.data[k].value = nodes[index]->output.data[k].value;
+
                     for (int k = 1; k < nodes[i]->inputsCount; k++)
                     {
                         int inputIndex = GetNodeIndex(nodes[i]->inputs[k]);
-                        
-                        if (inputIndex != -1)
+
+                        // Apply inputs values to output based on node operation type
+                        switch (nodes[i]->type)
                         {
-                            // Apply inputs values to output based on node operation type
-                            switch (nodes[i]->type)
+                            case FNODE_ADD:
                             {
-                                case FNODE_ADD:
-                                {
-                                    for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value += nodes[inputIndex]->output.data[j].value;
-                                } break;
-                                case FNODE_SUBTRACT:
-                                {
-                                    for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value -= nodes[inputIndex]->output.data[j].value;
-                                } break;
-                                case FNODE_MULTIPLY:
-                                {
-                                    for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value *= nodes[inputIndex]->output.data[j].value;
-                                } break;
-                                case FNODE_DIVIDE:
-                                {
-                                    for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value /= nodes[inputIndex]->output.data[j].value;
-                                } break;
-                                default: break;
-                            }
+                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value += nodes[inputIndex]->output.data[j].value;
+                            } break;
+                            case FNODE_SUBTRACT:
+                            {
+                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value -= nodes[inputIndex]->output.data[j].value;
+                            } break;
+                            case FNODE_MULTIPLY:
+                            {
+                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value *= nodes[inputIndex]->output.data[j].value;
+                            } break;
+                            case FNODE_DIVIDE:
+                            {
+                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value /= nodes[inputIndex]->output.data[j].value;
+                            } break;
+                            default: break;
                         }
-                        else TraceLogFNode(false, "error trying to get node id %i due to index is out of bounds %i", nodes[i]->inputs[k], inputIndex);
                     }
                 }
                 else
@@ -1058,18 +1121,14 @@ void CalculateValues()
                     for (int k = 0; k < nodes[i]->inputsCount; k++)
                     {
                         int inputIndex = GetNodeIndex(nodes[i]->inputs[k]);
-                        
-                        if (inputIndex != -1)
+
+                        for (int j = 0; j < nodes[inputIndex]->output.dataCount; j++)
                         {
-                            for (int j = 0; j < nodes[inputIndex]->output.dataCount; j++)
-                            {
-                                nodes[i]->output.data[valuesCount].value = nodes[inputIndex]->output.data[j].value;
-                                valuesCount++;
-                            }
+                            nodes[i]->output.data[valuesCount].value = nodes[inputIndex]->output.data[j].value;
+                            valuesCount++;
                         }
-                        else TraceLogFNode(true, "(3) error trying to get inputs from node id %i due to index is out of bounds %i", nodes[i]->id, inputIndex);
                     }
-                    
+
                     nodes[i]->output.dataCount = valuesCount;
                 }
                 else
@@ -1083,534 +1142,478 @@ void CalculateValues()
                 if (nodes[i]->inputsCount > 0)
                 {
                     int index = GetNodeIndex(nodes[i]->inputs[0]);
-                    
-                    if (index != -1)
+
+                    nodes[i]->output.dataCount = nodes[index]->output.dataCount;
+                    for (int k = 0; k < nodes[i]->output.dataCount; k++) nodes[i]->output.data[k].value = nodes[index]->output.data[k].value;
+
+                    switch (nodes[i]->type)
                     {
-                        nodes[i]->output.dataCount = nodes[index]->output.dataCount;
-                        for (int k = 0; k < nodes[i]->output.dataCount; k++) nodes[i]->output.data[k].value = nodes[index]->output.data[k].value;
-                        
-                        switch (nodes[i]->type)
+                        case FNODE_ONEMINUS:
                         {
-                            case FNODE_ONEMINUS:
+                            for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = 1 - nodes[i]->output.data[j].value;
+                        } break;
+                        case FNODE_ABS:
+                        {
+                            for (int j = 0; j < nodes[i]->output.dataCount; j++)
                             {
-                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = 1 - nodes[i]->output.data[j].value;
-                            } break;
-                            case FNODE_ABS:
+                                if (nodes[i]->output.data[j].value < 0) nodes[i]->output.data[j].value *= -1;
+                            }
+                        } break;
+                        case FNODE_COS:
+                        {
+                            for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = (float)FCos(nodes[i]->output.data[j].value);
+                        } break;
+                        case FNODE_SIN:
+                        {
+                            for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = (float)FSin(nodes[i]->output.data[j].value);
+                        } break;
+                        case FNODE_TAN:
+                        {
+                            for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = (float)FTan(nodes[i]->output.data[j].value);
+                        } break;
+                        case FNODE_DEG2RAD:
+                        {
+                            for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value *= DEG2RAD;
+                        } break;
+                        case FNODE_RAD2DEG:
+                        {
+                            for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value *= RAD2DEG;
+                        } break;
+                        case FNODE_NORMALIZE:
+                        {
+                            switch (nodes[i]->output.dataCount)
                             {
-                                for (int j = 0; j < nodes[i]->output.dataCount; j++)
+                                case 2:
                                 {
-                                    if (nodes[i]->output.data[j].value < 0) nodes[i]->output.data[j].value *= -1;
+                                    Vector2 temp = { nodes[i]->output.data[0].value, nodes[i]->output.data[1].value };
+                                    temp = FVector2Normalize(temp);
+                                    nodes[i]->output.data[0].value = temp.x;
+                                    nodes[i]->output.data[1].value = temp.y;
+                                } break;
+                                case 3:
+                                {
+                                    Vector3 temp = { nodes[i]->output.data[0].value, nodes[i]->output.data[1].value, nodes[i]->output.data[2].value };
+                                    temp = FVector3Normalize(temp);
+                                    nodes[i]->output.data[0].value = temp.x;
+                                    nodes[i]->output.data[1].value = temp.y;
+                                    nodes[i]->output.data[2].value = temp.z;
+                                } break;
+                                case 4:
+                                {
+                                    Vector4 temp = { nodes[i]->output.data[0].value, nodes[i]->output.data[1].value, nodes[i]->output.data[2].value, nodes[i]->output.data[3].value };
+                                    temp = FVector4Normalize(temp);
+                                    nodes[i]->output.data[0].value = temp.x;
+                                    nodes[i]->output.data[1].value = temp.y;
+                                    nodes[i]->output.data[2].value = temp.z;
+                                    nodes[i]->output.data[3].value = temp.w;
+                                } break;
+                                default: break;
+                            }
+                        } break;
+                        case FNODE_NEGATE:
+                        {
+                            for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value *= -1;
+                        } break;
+                        case FNODE_RECIPROCAL:
+                        {
+                            for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = 1/nodes[i]->output.data[j].value;
+                        } break;
+                        case FNODE_SQRT:
+                        {
+                            for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FSquareRoot(nodes[i]->output.data[j].value);
+                        } break;
+                        case FNODE_TRUNC:
+                        {
+                            for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FTrunc(nodes[i]->output.data[j].value);
+                        } break;
+                        case FNODE_ROUND:
+                        {
+                            for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FRound(nodes[i]->output.data[j].value);
+                        } break;
+                        case FNODE_CEIL:
+                        {
+                            for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FCeil(nodes[i]->output.data[j].value);
+                        } break;
+                        case FNODE_CLAMP01:
+                        {
+                            for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FClamp(nodes[i]->output.data[j].value, 0.0f, 1.0f);
+                        } break;
+                        case FNODE_EXP2:
+                        {
+                            for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FPower(2.0f, nodes[i]->output.data[j].value);
+                        } break;
+                        case FNODE_POWER:
+                        {
+                            if (nodes[i]->inputsCount == 2)
+                            {
+                                int expIndex = GetNodeIndex(nodes[i]->inputs[1]);
+
+                                if (nodes[expIndex]->output.dataCount == 1)
+                                {
+                                    for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FPower(nodes[i]->output.data[j].value, nodes[expIndex]->output.data[0].value);
                                 }
-                            } break;
-                            case FNODE_COS:
+                                else TraceLogFNode(false, "values count of node %i should be 1 because it is an exponent (currently count: %i)", nodes[expIndex]->id, nodes[expIndex]->output.dataCount);
+                            }
+                            else
                             {
-                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = (float)FCos(nodes[i]->output.data[j].value);
-                            } break;
-                            case FNODE_SIN:
+                                nodes[i]->output.dataCount = 0;
+                                for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+                            }
+                        } break;
+                        case FNODE_STEP:
+                        {
+                            if (nodes[i]->inputsCount == 2)
                             {
-                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = (float)FSin(nodes[i]->output.data[j].value);
-                            } break;
-                            case FNODE_TAN:
+                                int indexB = GetNodeIndex(nodes[i]->inputs[1]);
+
+                                if (nodes[indexB]->output.dataCount == 1) nodes[i]->output.data[0].value = ((nodes[i]->output.data[0].value <= nodes[indexB]->output.data[0].value) ? 1.0f : 0.0f);
+                                else TraceLogFNode(false, "values count of node %i should be 1 because it is an exponent (currently count: %i)", nodes[indexB]->id, nodes[indexB]->output.dataCount);
+                            }
+                            else
                             {
-                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = (float)FTan(nodes[i]->output.data[j].value);
-                            } break;
-                            case FNODE_DEG2RAD:
+                                nodes[i]->output.dataCount = 0;
+                                for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+                            }
+                        } break;
+                        case FNODE_POSTERIZE:
+                        {
+                            if (nodes[i]->inputsCount == 2)
                             {
-                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value *= DEG2RAD;
-                            } break;
-                            case FNODE_RAD2DEG:
+                                int expIndex = GetNodeIndex(nodes[i]->inputs[1]);
+
+                                if (nodes[expIndex]->output.dataCount == 1)
+                                {
+                                    for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FPosterize(nodes[i]->output.data[j].value, nodes[expIndex]->output.data[0].value);
+                                }
+                            }
+                            else
                             {
-                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value *= RAD2DEG;
-                            } break;
-                            case FNODE_NORMALIZE:
+                                nodes[i]->output.dataCount = 0;
+                                for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+                            }
+                        } break;
+                        case FNODE_MAX:
+                        case FNODE_MIN:
+                        {
+                            for (int j = 1; j < nodes[i]->inputsCount; j++)
                             {
+                                int inputIndex = GetNodeIndex(nodes[i]->inputs[j]);
+
+                                for (int k = 0; k < nodes[i]->output.dataCount; k++)
+                                {
+                                    if ((nodes[inputIndex]->output.data[k].value > nodes[i]->output.data[k].value) && (nodes[i]->type == FNODE_MAX)) nodes[i]->output.data[k].value = nodes[inputIndex]->output.data[k].value;
+                                    else if ((nodes[inputIndex]->output.data[k].value < nodes[i]->output.data[k].value) && (nodes[i]->type == FNODE_MIN)) nodes[i]->output.data[k].value = nodes[inputIndex]->output.data[k].value;
+                                }
+                            }
+                        } break;
+                        case FNODE_NOISE:
+                        case FNODE_NOISEINT:
+                        {
+                            nodes[i]->output.dataCount = 1;
+                            nodes[i]->output.data[0].value = (float)(GetRandomValue(nodes[i]->output.data[0].value, nodes[i]->output.data[1].value));
+                            if (nodes[i]->type == FNODE_NOISE) nodes[i]->output.data[0].value += (float)(GetRandomValue(0, 99))/100 + (float)(GetRandomValue(0, 99))/1000;
+                            for (int j = 1; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+                        } break;
+                        case FNODE_LERP:
+                        {                                
+                            if (nodes[i]->inputsCount == 3)
+                            {
+                                int indexA = GetNodeIndex(nodes[i]->inputs[0]);
+                                int indexB = GetNodeIndex(nodes[i]->inputs[1]);
+                                int indexC = GetNodeIndex(nodes[i]->inputs[2]);
+
+                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FLerp(nodes[indexA]->output.data[j].value, nodes[indexB]->output.data[j].value, nodes[indexC]->output.data[j].value);
+                            }
+                            else
+                            {
+                                nodes[i]->output.dataCount = 0;
+                                for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+                            }
+                        } break;
+                        case FNODE_SMOOTHSTEP:
+                        {                                
+                            if (nodes[i]->inputsCount == 3)
+                            {
+                                int indexA = GetNodeIndex(nodes[i]->inputs[0]);
+                                int indexB = GetNodeIndex(nodes[i]->inputs[1]);
+                                int indexC = GetNodeIndex(nodes[i]->inputs[2]);
+
+                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FSmoothStep(nodes[indexA]->output.data[j].value, nodes[indexB]->output.data[j].value, nodes[indexC]->output.data[j].value);
+                            }
+                            else
+                            {
+                                nodes[i]->output.dataCount = 0;
+                                for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+                            }
+                        } break;
+                        case FNODE_CROSSPRODUCT:
+                        {
+                            if (nodes[i]->inputsCount == 2)
+                            {
+                                int indexA = GetNodeIndex(nodes[i]->inputs[0]);
+                                int indexB = GetNodeIndex(nodes[i]->inputs[1]);
+
+                                for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+                                
+                                Vector3 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value, nodes[indexA]->output.data[2].value };
+                                Vector3 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value, nodes[indexB]->output.data[2].value };
+                                Vector3 cross = FCrossProduct(vectorA, vectorB);
+
+                                nodes[i]->output.dataCount = 3;
+                                nodes[i]->output.data[0].value = cross.x;
+                                nodes[i]->output.data[1].value = cross.y;
+                                nodes[i]->output.data[2].value = cross.z;
+                            }
+                            else
+                            {
+                                nodes[i]->output.dataCount = 0;
+                                for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+                            }
+                        } break;
+                        case FNODE_DESATURATE:
+                        {
+                            if (nodes[i]->inputsCount == 2)
+                            {                                   
+                                int index = GetNodeIndex(nodes[i]->inputs[1]);
+
+                                for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+
+                                float amount = FClamp(nodes[index]->output.data[0].value, 0.0f, 1.0f);
+                                float luminance = 0.3f*nodes[i]->output.data[0].value + 0.6f*nodes[i]->output.data[1].value + 0.1f*nodes[i]->output.data[2].value;
+
+                                nodes[i]->output.data[0].value = nodes[i]->output.data[0].value + amount*(luminance - nodes[i]->output.data[0].value);
+                                nodes[i]->output.data[1].value = nodes[i]->output.data[1].value + amount*(luminance - nodes[i]->output.data[1].value);
+                                nodes[i]->output.data[2].value = nodes[i]->output.data[2].value + amount*(luminance - nodes[i]->output.data[2].value);
+                            }
+                            else
+                            {
+                                nodes[i]->output.dataCount = 0;
+                                for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+                            }
+                        } break;
+                        case FNODE_DISTANCE:
+                        {
+                            if (nodes[i]->inputsCount == 2)
+                            {
+                                int indexA = GetNodeIndex(nodes[i]->inputs[0]);
+                                int indexB = GetNodeIndex(nodes[i]->inputs[1]);
+
+                                switch (nodes[i]->output.dataCount)
+                                {
+                                    case 1: nodes[i]->output.data[0].value = nodes[indexB]->output.data[0].value - nodes[indexA]->output.data[0].value; break;
+                                    case 2:
+                                    {
+                                        Vector2 direction = { 0, 0 };
+                                        direction.x = nodes[indexB]->output.data[0].value - nodes[indexA]->output.data[0].value;
+                                        direction.y = nodes[indexB]->output.data[1].value - nodes[indexA]->output.data[1].value;
+
+                                        nodes[i]->output.data[0].value = FVector2Length(direction);
+                                    } break;
+                                    case 3:
+                                    {
+                                        Vector3 direction = { 0, 0, 0 };
+                                        direction.x = nodes[indexB]->output.data[0].value - nodes[indexA]->output.data[0].value;
+                                        direction.y = nodes[indexB]->output.data[1].value - nodes[indexA]->output.data[1].value;
+                                        direction.z = nodes[indexB]->output.data[2].value - nodes[indexA]->output.data[2].value;
+
+                                        nodes[i]->output.data[0].value = FVector3Length(direction);
+                                    } break;
+                                    case 4:
+                                    {
+                                        Vector4 direction = { 0, 0, 0, 0 };
+                                        direction.x = nodes[indexB]->output.data[0].value - nodes[indexA]->output.data[0].value;
+                                        direction.y = nodes[indexB]->output.data[1].value - nodes[indexA]->output.data[1].value;
+                                        direction.z = nodes[indexB]->output.data[2].value - nodes[indexA]->output.data[2].value;
+                                        direction.w = nodes[indexB]->output.data[3].value - nodes[indexA]->output.data[3].value;
+
+                                        nodes[i]->output.data[0].value = FVector4Length(direction);
+                                    } break;
+                                    default: break;
+                                }
+
+                                for (int j = 1; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+                                nodes[i]->output.dataCount = 1;
+                            }
+                            else
+                            {
+                                for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+                                nodes[i]->output.dataCount = 0;
+                            }
+                        } break;
+                        case FNODE_DOTPRODUCT:
+                        {
+                            if (nodes[i]->inputsCount == 2)
+                            {
+                                int indexA = GetNodeIndex(nodes[i]->inputs[0]);
+                                int indexB = GetNodeIndex(nodes[i]->inputs[1]);
+
                                 switch (nodes[i]->output.dataCount)
                                 {
                                     case 2:
                                     {
-                                        Vector2 temp = { nodes[i]->output.data[0].value, nodes[i]->output.data[1].value };
-                                        temp = FVector2Normalize(temp);
-                                        nodes[i]->output.data[0].value = temp.x;
-                                        nodes[i]->output.data[1].value = temp.y;
+                                        Vector2 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value };
+                                        Vector2 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value };
+                                        nodes[i]->output.data[0].value = FVector2Dot(vectorA, vectorB);
                                     } break;
                                     case 3:
                                     {
-                                        Vector3 temp = { nodes[i]->output.data[0].value, nodes[i]->output.data[1].value, nodes[i]->output.data[2].value };
-                                        temp = FVector3Normalize(temp);
-                                        nodes[i]->output.data[0].value = temp.x;
-                                        nodes[i]->output.data[1].value = temp.y;
-                                        nodes[i]->output.data[2].value = temp.z;
+                                        Vector3 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value, nodes[indexA]->output.data[2].value };
+                                        Vector3 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value, nodes[indexB]->output.data[2].value };
+                                        nodes[i]->output.data[0].value = FVector3Dot(vectorA, vectorB);
                                     } break;
                                     case 4:
                                     {
-                                        Vector4 temp = { nodes[i]->output.data[0].value, nodes[i]->output.data[1].value, nodes[i]->output.data[2].value, nodes[i]->output.data[3].value };
-                                        temp = FVector4Normalize(temp);
-                                        nodes[i]->output.data[0].value = temp.x;
-                                        nodes[i]->output.data[1].value = temp.y;
-                                        nodes[i]->output.data[2].value = temp.z;
-                                        nodes[i]->output.data[3].value = temp.w;
+                                        Vector4 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value, nodes[indexA]->output.data[2].value, nodes[indexA]->output.data[3].value };
+                                        Vector4 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value, nodes[indexB]->output.data[2].value, nodes[indexB]->output.data[3].value };
+                                        nodes[i]->output.data[0].value = FVector4Dot(vectorA, vectorB);
                                     } break;
                                     default: break;
                                 }
-                            } break;
-                            case FNODE_NEGATE:
-                            {
-                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value *= -1;
-                            } break;
-                            case FNODE_RECIPROCAL:
-                            {
-                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = 1/nodes[i]->output.data[j].value;
-                            } break;
-                            case FNODE_SQRT:
-                            {
-                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FSquareRoot(nodes[i]->output.data[j].value);
-                            } break;
-                            case FNODE_TRUNC:
-                            {
-                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FTrunc(nodes[i]->output.data[j].value);
-                            } break;
-                            case FNODE_ROUND:
-                            {
-                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FRound(nodes[i]->output.data[j].value);
-                            } break;
-                            case FNODE_CEIL:
-                            {
-                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FCeil(nodes[i]->output.data[j].value);
-                            } break;
-                            case FNODE_CLAMP01:
-                            {
-                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FClamp(nodes[i]->output.data[j].value, 0.0f, 1.0f);
-                            } break;
-                            case FNODE_EXP2:
-                            {
-                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FPower(2.0f, nodes[i]->output.data[j].value);
-                            } break;
-                            case FNODE_POWER:
-                            {
-                                if (nodes[i]->inputsCount == 2)
-                                {
-                                    int expIndex = GetNodeIndex(nodes[i]->inputs[1]);
-                                    
-                                    if (expIndex != -1)
-                                    {
-                                        if (nodes[expIndex]->output.dataCount == 1)
-                                        {
-                                            for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FPower(nodes[i]->output.data[j].value, nodes[expIndex]->output.data[0].value);
-                                        }
-                                        else TraceLogFNode(false, "values count of node %i should be 1 because it is an exponent (currently count: %i)", nodes[expIndex]->id, nodes[expIndex]->output.dataCount);
-                                    }
-                                    else TraceLogFNode(true, "error when trying to get node inputs index in a specific inputs node");
-                                }
-                                else
-                                {
-                                    nodes[i]->output.dataCount = 0;
-                                    for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
-                                }
-                            } break;
-                            case FNODE_STEP:
-                            {
-                                if (nodes[i]->inputsCount == 2)
-                                {
-                                    int indexB = GetNodeIndex(nodes[i]->inputs[1]);
-                                    
-                                    if (indexB != -1)
-                                    {
-                                        if (nodes[indexB]->output.dataCount == 1) nodes[i]->output.data[0].value = ((nodes[i]->output.data[0].value <= nodes[indexB]->output.data[0].value) ? 1.0f : 0.0f);
-                                        else TraceLogFNode(false, "values count of node %i should be 1 because it is an exponent (currently count: %i)", nodes[indexB]->id, nodes[indexB]->output.dataCount);
-                                    }
-                                    else TraceLogFNode(true, "error when trying to get input node index");
-                                }
-                                else
-                                {
-                                    nodes[i]->output.dataCount = 0;
-                                    for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
-                                }
-                            } break;
-                            case FNODE_POSTERIZE:
-                            {
-                                if (nodes[i]->inputsCount == 2)
-                                {
-                                    int expIndex = GetNodeIndex(nodes[i]->inputs[1]);
-                                    
-                                    if (expIndex != -1)
-                                    {
-                                        if (nodes[expIndex]->output.dataCount == 1)
-                                        {
-                                            for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FPosterize(nodes[i]->output.data[j].value, nodes[expIndex]->output.data[0].value);
-                                        }
-                                        else TraceLogFNode(false, "values count of node %i should be 1 because it is an exponent (currently count: %i)", nodes[expIndex]->id, nodes[expIndex]->output.dataCount);
-                                    }
-                                }
-                                else
-                                {
-                                    nodes[i]->output.dataCount = 0;
-                                    for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
-                                }
-                            } break;
-                            case FNODE_MAX:
-                            case FNODE_MIN:
-                            {
-                                for (int j = 1; j < nodes[i]->inputsCount; j++)
-                                {
-                                    int inputIndex = GetNodeIndex(nodes[i]->inputs[j]);
-                                    
-                                    if (inputIndex != -1)
-                                    {
-                                        for (int k = 0; k < nodes[i]->output.dataCount; k++)
-                                        {
-                                            if ((nodes[inputIndex]->output.data[k].value > nodes[i]->output.data[k].value) && (nodes[i]->type == FNODE_MAX)) nodes[i]->output.data[k].value = nodes[inputIndex]->output.data[k].value;
-                                            else if ((nodes[inputIndex]->output.data[k].value < nodes[i]->output.data[k].value) && (nodes[i]->type == FNODE_MIN)) nodes[i]->output.data[k].value = nodes[inputIndex]->output.data[k].value;
-                                        }
-                                    }
-                                    else TraceLogFNode(true, "(6) error trying to get inputs from node id %i due to index is out of bounds %i", nodes[i]->id, inputIndex);
-                                }
-                            } break;
-                            case FNODE_NOISE:
-                            case FNODE_NOISEINT:
-                            {
-                                nodes[i]->output.dataCount = 1;
-                                nodes[i]->output.data[0].value = (float)(GetRandomValue(nodes[i]->output.data[0].value, nodes[i]->output.data[1].value));
-                                if (nodes[i]->type == FNODE_NOISE) nodes[i]->output.data[0].value += (float)(GetRandomValue(0, 99))/100 + (float)(GetRandomValue(0, 99))/1000;
-                                for (int j = 1; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
-                            } break;
-                            case FNODE_LERP:
-                            {                                
-                                if (nodes[i]->inputsCount == 3)
-                                {
-                                    int indexA = GetNodeIndex(nodes[i]->inputs[0]);
-                                    int indexB = GetNodeIndex(nodes[i]->inputs[1]);
-                                    int indexC = GetNodeIndex(nodes[i]->inputs[2]);
-                                    
-                                    if ((indexA != -1) && (indexB != -1) && (indexC != -1))
-                                    {
-                                        for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FLerp(nodes[indexA]->output.data[j].value, nodes[indexB]->output.data[j].value, nodes[indexC]->output.data[j].value);
-                                    }
-                                    else TraceLogFNode(true, "error when trying to get node inputs index in a specific inputs node");
-                                }
-                                else
-                                {
-                                    nodes[i]->output.dataCount = 0;
-                                    for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
-                                }
-                            } break;
-                            case FNODE_SMOOTHSTEP:
-                            {                                
-                                if (nodes[i]->inputsCount == 3)
-                                {
-                                    int indexA = GetNodeIndex(nodes[i]->inputs[0]);
-                                    int indexB = GetNodeIndex(nodes[i]->inputs[1]);
-                                    int indexC = GetNodeIndex(nodes[i]->inputs[2]);
-                                    
-                                    if ((indexA != -1) && (indexB != -1) && (indexC != -1))
-                                    {
-                                        for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FSmoothStep(nodes[indexA]->output.data[j].value, nodes[indexB]->output.data[j].value, nodes[indexC]->output.data[j].value);
-                                    }
-                                    else TraceLogFNode(true, "error when trying to get node inputs index in a specific inputs node");
-                                }
-                                else
-                                {
-                                    nodes[i]->output.dataCount = 0;
-                                    for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
-                                }
-                            } break;
-                            case FNODE_CROSSPRODUCT:
-                            {
-                                if (nodes[i]->inputsCount == 2)
-                                {
-                                    int indexA = GetNodeIndex(nodes[i]->inputs[0]);
-                                    int indexB = GetNodeIndex(nodes[i]->inputs[1]);
-                                    
-                                    if ((indexA != -1) && (indexB != -1))
-                                    {
-                                        for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
-                                        
-                                        Vector3 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value, nodes[indexA]->output.data[2].value };
-                                        Vector3 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value, nodes[indexB]->output.data[2].value };
-                                        Vector3 cross = FCrossProduct(vectorA, vectorB);
-                                        
-                                        nodes[i]->output.dataCount = 3;
-                                        nodes[i]->output.data[0].value = cross.x;
-                                        nodes[i]->output.data[1].value = cross.y;
-                                        nodes[i]->output.data[2].value = cross.z;
-                                    }
-                                    else TraceLogFNode(true, "error when trying to get node inputs index in a specific inputs node");
-                                }
-                                else
-                                {
-                                    nodes[i]->output.dataCount = 0;
-                                    for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
-                                }
-                            } break;
-                            case FNODE_DESATURATE:
-                            {
-                                if (nodes[i]->inputsCount == 2)
-                                {                                   
-                                    int index = GetNodeIndex(nodes[i]->inputs[1]);
-                                    
-                                    if (index != -1)
-                                    {
-                                        for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
-                                        
-                                        float amount = FClamp(nodes[index]->output.data[0].value, 0.0f, 1.0f);
-                                        float luminance = 0.3f*nodes[i]->output.data[0].value + 0.6f*nodes[i]->output.data[1].value + 0.1f*nodes[i]->output.data[2].value;
-                                        
-                                        nodes[i]->output.data[0].value = nodes[i]->output.data[0].value + amount*(luminance - nodes[i]->output.data[0].value);
-                                        nodes[i]->output.data[1].value = nodes[i]->output.data[1].value + amount*(luminance - nodes[i]->output.data[1].value);
-                                        nodes[i]->output.data[2].value = nodes[i]->output.data[2].value + amount*(luminance - nodes[i]->output.data[2].value);
-                                    }
-                                    else TraceLogFNode(true, "error when trying to get node inputs index in a specific inputs node");
-                                }
-                                else
-                                {
-                                    nodes[i]->output.dataCount = 0;
-                                    for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
-                                }
-                            } break;
-                            case FNODE_DISTANCE:
-                            {
-                                if (nodes[i]->inputsCount == 2)
-                                {
-                                    int indexA = GetNodeIndex(nodes[i]->inputs[0]);
-                                    int indexB = GetNodeIndex(nodes[i]->inputs[1]);
-                                    
-                                    if ((indexA != -1) && (indexB != -1))
-                                    {
-                                        switch (nodes[i]->output.dataCount)
-                                        {
-                                            case 1:
-                                            {
-                                                nodes[i]->output.data[0].value = nodes[indexB]->output.data[0].value - nodes[indexA]->output.data[0].value;
-                                                
-                                            } break;
-                                            case 2:
-                                            {
-                                                Vector2 direction = { 0, 0 };
-                                                direction.x = nodes[indexB]->output.data[0].value - nodes[indexA]->output.data[0].value;
-                                                direction.y = nodes[indexB]->output.data[1].value - nodes[indexA]->output.data[1].value;
-                                                
-                                                nodes[i]->output.data[0].value = FVector2Length(direction);
-                                            } break;
-                                            case 3:
-                                            {
-                                                Vector3 direction = { 0, 0, 0 };
-                                                direction.x = nodes[indexB]->output.data[0].value - nodes[indexA]->output.data[0].value;
-                                                direction.y = nodes[indexB]->output.data[1].value - nodes[indexA]->output.data[1].value;
-                                                direction.z = nodes[indexB]->output.data[2].value - nodes[indexA]->output.data[2].value;
-                                                
-                                                nodes[i]->output.data[0].value = FVector3Length(direction);
-                                            } break;
-                                            case 4:
-                                            {
-                                                Vector4 direction = { 0, 0, 0, 0 };
-                                                direction.x = nodes[indexB]->output.data[0].value - nodes[indexA]->output.data[0].value;
-                                                direction.y = nodes[indexB]->output.data[1].value - nodes[indexA]->output.data[1].value;
-                                                direction.z = nodes[indexB]->output.data[2].value - nodes[indexA]->output.data[2].value;
-                                                direction.w = nodes[indexB]->output.data[3].value - nodes[indexA]->output.data[3].value;
-                                                
-                                                nodes[i]->output.data[0].value = FVector4Length(direction);
-                                            } break;
-                                            default: break;
-                                        }
-                                        
-                                        for (int j = 1; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
-                                        nodes[i]->output.dataCount = 1;
-                                    }
-                                    else TraceLogFNode(true, "error when trying to get node inputs index in a specific inputs node");
-                                }
-                                else
-                                {
-                                    for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
-                                    nodes[i]->output.dataCount = 0;
-                                }
-                            } break;
-                            case FNODE_DOTPRODUCT:
-                            {
-                                if (nodes[i]->inputsCount == 2)
-                                {
-                                    int indexA = GetNodeIndex(nodes[i]->inputs[0]);
-                                    int indexB = GetNodeIndex(nodes[i]->inputs[1]);
-                                    
-                                    if ((indexA != -1) && (indexB != -1))
-                                    {
-                                        switch (nodes[i]->output.dataCount)
-                                        {
-                                            case 2:
-                                            {
-                                                Vector2 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value };
-                                                Vector2 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value };
-                                                nodes[i]->output.data[0].value = FVector2Dot(vectorA, vectorB);
-                                            } break;
-                                            case 3:
-                                            {
-                                                Vector3 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value, nodes[indexA]->output.data[2].value };
-                                                Vector3 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value, nodes[indexB]->output.data[2].value };
-                                                nodes[i]->output.data[0].value = FVector3Dot(vectorA, vectorB);
-                                            } break;
-                                            case 4:
-                                            {
-                                                Vector4 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value, nodes[indexA]->output.data[2].value, nodes[indexA]->output.data[3].value };
-                                                Vector4 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value, nodes[indexB]->output.data[2].value, nodes[indexB]->output.data[3].value };
-                                                nodes[i]->output.data[0].value = FVector4Dot(vectorA, vectorB);
-                                            } break;
-                                            default: break;
-                                        }
-                                        
-                                        for (int j = 1; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
-                                        nodes[i]->output.dataCount = 1;
-                                    }
-                                    else TraceLogFNode(true, "error when trying to get node inputs index in a specific inputs node");
-                                }
-                                else
-                                {
-                                    for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
-                                    nodes[i]->output.dataCount = 0;
-                                }
-                            } break;
-                            case FNODE_LENGTH:
-                            {
-                                switch (nodes[i]->output.dataCount)
-                                {
-                                    case 2: nodes[i]->output.data[0].value = FVector2Length((Vector2){ nodes[i]->output.data[0].value, nodes[i]->output.data[1].value }); break;
-                                    case 3: nodes[i]->output.data[0].value = FVector3Length((Vector3){ nodes[i]->output.data[0].value, nodes[i]->output.data[1].value, nodes[i]->output.data[2].value }); break;
-                                    case 4: nodes[i]->output.data[0].value = FVector4Length((Vector4){ nodes[i]->output.data[0].value, nodes[i]->output.data[1].value, nodes[i]->output.data[2].value, nodes[i]->output.data[3].value }); break;
-                                    default: break;
-                                }
-                                
+
                                 for (int j = 1; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
                                 nodes[i]->output.dataCount = 1;
-                            } break;
-                            case FNODE_MULTIPLYMATRIX:
+                            }
+                            else
                             {
-                                if (nodes[i]->inputsCount == 2)
-                                {
-                                    int index = GetNodeIndex(nodes[i]->inputs[1]);
-                                    
-                                    if (index != -1)
-                                    {
-                                        Matrix matrixA = { nodes[i]->output.data[0].value, nodes[i]->output.data[1].value, nodes[i]->output.data[2].value, nodes[i]->output.data[3].value, 
-                                        nodes[i]->output.data[4].value, nodes[i]->output.data[5].value, nodes[i]->output.data[6].value, nodes[i]->output.data[7].value, 
-                                        nodes[i]->output.data[8].value, nodes[i]->output.data[9].value, nodes[i]->output.data[10].value, nodes[i]->output.data[11].value, 
-                                        nodes[i]->output.data[12].value, nodes[i]->output.data[13].value, nodes[i]->output.data[14].value, nodes[i]->output.data[15].value, };
-                                        
-                                        Matrix matrixB = { nodes[index]->output.data[0].value, nodes[index]->output.data[1].value, nodes[index]->output.data[2].value, nodes[index]->output.data[3].value, 
-                                        nodes[index]->output.data[4].value, nodes[index]->output.data[5].value, nodes[index]->output.data[6].value, nodes[index]->output.data[7].value, 
-                                        nodes[index]->output.data[8].value, nodes[index]->output.data[9].value, nodes[index]->output.data[10].value, nodes[index]->output.data[11].value, 
-                                        nodes[index]->output.data[12].value, nodes[index]->output.data[13].value, nodes[index]->output.data[14].value, nodes[index]->output.data[15].value, };
-                                        
-                                        Matrix matrixAB = FMatrixMultiply(matrixA, matrixB);
-                                        
-                                        nodes[i]->output.data[0].value = matrixAB.m0;
-                                        nodes[i]->output.data[1].value = matrixAB.m1;
-                                        nodes[i]->output.data[2].value = matrixAB.m2;
-                                        nodes[i]->output.data[3].value = matrixAB.m3;
-                                        nodes[i]->output.data[4].value = matrixAB.m4;
-                                        nodes[i]->output.data[5].value = matrixAB.m5;
-                                        nodes[i]->output.data[6].value = matrixAB.m6;
-                                        nodes[i]->output.data[7].value = matrixAB.m7;
-                                        nodes[i]->output.data[8].value = matrixAB.m8;
-                                        nodes[i]->output.data[9].value = matrixAB.m9;
-                                        nodes[i]->output.data[10].value = matrixAB.m10;
-                                        nodes[i]->output.data[11].value = matrixAB.m11;
-                                        nodes[i]->output.data[12].value = matrixAB.m12;
-                                        nodes[i]->output.data[13].value = matrixAB.m13;
-                                        nodes[i]->output.data[14].value = matrixAB.m14;
-                                        nodes[i]->output.data[15].value = matrixAB.m15;
-                                    }
-                                    else TraceLogFNode(true, "error when trying to get inputs node index");
-                                }
-                            } break;
-                            case FNODE_TRANSPOSE:
+                                for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+                                nodes[i]->output.dataCount = 0;
+                            }
+                        } break;
+                        case FNODE_LENGTH:
+                        {
+                            switch (nodes[i]->output.dataCount)
                             {
-                                Matrix matrix = { nodes[i]->output.data[0].value, nodes[i]->output.data[1].value, nodes[i]->output.data[2].value, nodes[i]->output.data[3].value, 
+                                case 2: nodes[i]->output.data[0].value = FVector2Length((Vector2){ nodes[i]->output.data[0].value, nodes[i]->output.data[1].value }); break;
+                                case 3: nodes[i]->output.data[0].value = FVector3Length((Vector3){ nodes[i]->output.data[0].value, nodes[i]->output.data[1].value, nodes[i]->output.data[2].value }); break;
+                                case 4: nodes[i]->output.data[0].value = FVector4Length((Vector4){ nodes[i]->output.data[0].value, nodes[i]->output.data[1].value, nodes[i]->output.data[2].value, nodes[i]->output.data[3].value }); break;
+                                default: break;
+                            }
+
+                            for (int j = 1; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+                            nodes[i]->output.dataCount = 1;
+                        } break;
+                        case FNODE_MULTIPLYMATRIX:
+                        {
+                            if (nodes[i]->inputsCount == 2)
+                            {
+                                int index = GetNodeIndex(nodes[i]->inputs[1]);
+
+                                Matrix matrixA = { nodes[i]->output.data[0].value, nodes[i]->output.data[1].value, nodes[i]->output.data[2].value, nodes[i]->output.data[3].value, 
                                 nodes[i]->output.data[4].value, nodes[i]->output.data[5].value, nodes[i]->output.data[6].value, nodes[i]->output.data[7].value, 
                                 nodes[i]->output.data[8].value, nodes[i]->output.data[9].value, nodes[i]->output.data[10].value, nodes[i]->output.data[11].value, 
                                 nodes[i]->output.data[12].value, nodes[i]->output.data[13].value, nodes[i]->output.data[14].value, nodes[i]->output.data[15].value, };
                                 
-                                FMatrixTranspose(&matrix);
+                                Matrix matrixB = { nodes[index]->output.data[0].value, nodes[index]->output.data[1].value, nodes[index]->output.data[2].value, nodes[index]->output.data[3].value, 
+                                nodes[index]->output.data[4].value, nodes[index]->output.data[5].value, nodes[index]->output.data[6].value, nodes[index]->output.data[7].value, 
+                                nodes[index]->output.data[8].value, nodes[index]->output.data[9].value, nodes[index]->output.data[10].value, nodes[index]->output.data[11].value, 
+                                nodes[index]->output.data[12].value, nodes[index]->output.data[13].value, nodes[index]->output.data[14].value, nodes[index]->output.data[15].value, };
                                 
-                                nodes[i]->output.data[0].value = matrix.m0;
-                                nodes[i]->output.data[1].value = matrix.m1;
-                                nodes[i]->output.data[2].value = matrix.m2;
-                                nodes[i]->output.data[3].value = matrix.m3;
-                                nodes[i]->output.data[4].value = matrix.m4;
-                                nodes[i]->output.data[5].value = matrix.m5;
-                                nodes[i]->output.data[6].value = matrix.m6;
-                                nodes[i]->output.data[7].value = matrix.m7;
-                                nodes[i]->output.data[8].value = matrix.m8;
-                                nodes[i]->output.data[9].value = matrix.m9;
-                                nodes[i]->output.data[10].value = matrix.m10;
-                                nodes[i]->output.data[11].value = matrix.m11;
-                                nodes[i]->output.data[12].value = matrix.m12;
-                                nodes[i]->output.data[13].value = matrix.m13;
-                                nodes[i]->output.data[14].value = matrix.m14;
-                                nodes[i]->output.data[15].value = matrix.m15;
-                            } break;
-                            case FNODE_PROJECTION:
-                            case FNODE_REJECTION:
+                                Matrix matrixAB = FMatrixMultiply(matrixA, matrixB);
+                                
+                                nodes[i]->output.data[0].value = matrixAB.m0;
+                                nodes[i]->output.data[1].value = matrixAB.m1;
+                                nodes[i]->output.data[2].value = matrixAB.m2;
+                                nodes[i]->output.data[3].value = matrixAB.m3;
+                                nodes[i]->output.data[4].value = matrixAB.m4;
+                                nodes[i]->output.data[5].value = matrixAB.m5;
+                                nodes[i]->output.data[6].value = matrixAB.m6;
+                                nodes[i]->output.data[7].value = matrixAB.m7;
+                                nodes[i]->output.data[8].value = matrixAB.m8;
+                                nodes[i]->output.data[9].value = matrixAB.m9;
+                                nodes[i]->output.data[10].value = matrixAB.m10;
+                                nodes[i]->output.data[11].value = matrixAB.m11;
+                                nodes[i]->output.data[12].value = matrixAB.m12;
+                                nodes[i]->output.data[13].value = matrixAB.m13;
+                                nodes[i]->output.data[14].value = matrixAB.m14;
+                                nodes[i]->output.data[15].value = matrixAB.m15;
+                            }
+                        } break;
+                        case FNODE_TRANSPOSE:
+                        {
+                            Matrix matrix = { nodes[i]->output.data[0].value, nodes[i]->output.data[1].value, nodes[i]->output.data[2].value, nodes[i]->output.data[3].value, 
+                            nodes[i]->output.data[4].value, nodes[i]->output.data[5].value, nodes[i]->output.data[6].value, nodes[i]->output.data[7].value, 
+                            nodes[i]->output.data[8].value, nodes[i]->output.data[9].value, nodes[i]->output.data[10].value, nodes[i]->output.data[11].value, 
+                            nodes[i]->output.data[12].value, nodes[i]->output.data[13].value, nodes[i]->output.data[14].value, nodes[i]->output.data[15].value, };
+
+                            FMatrixTranspose(&matrix);
+
+                            nodes[i]->output.data[0].value = matrix.m0;
+                            nodes[i]->output.data[1].value = matrix.m1;
+                            nodes[i]->output.data[2].value = matrix.m2;
+                            nodes[i]->output.data[3].value = matrix.m3;
+                            nodes[i]->output.data[4].value = matrix.m4;
+                            nodes[i]->output.data[5].value = matrix.m5;
+                            nodes[i]->output.data[6].value = matrix.m6;
+                            nodes[i]->output.data[7].value = matrix.m7;
+                            nodes[i]->output.data[8].value = matrix.m8;
+                            nodes[i]->output.data[9].value = matrix.m9;
+                            nodes[i]->output.data[10].value = matrix.m10;
+                            nodes[i]->output.data[11].value = matrix.m11;
+                            nodes[i]->output.data[12].value = matrix.m12;
+                            nodes[i]->output.data[13].value = matrix.m13;
+                            nodes[i]->output.data[14].value = matrix.m14;
+                            nodes[i]->output.data[15].value = matrix.m15;
+                        } break;
+                        case FNODE_PROJECTION:
+                        case FNODE_REJECTION:
+                        {
+                            if (nodes[i]->inputsCount == 2)
                             {
-                                if (nodes[i]->inputsCount == 2)
+                                int indexA = GetNodeIndex(nodes[i]->inputs[0]);
+                                int indexB = GetNodeIndex(nodes[i]->inputs[1]);
+
+                                switch (nodes[i]->output.dataCount)
                                 {
-                                    int indexA = GetNodeIndex(nodes[i]->inputs[0]);
-                                    int indexB = GetNodeIndex(nodes[i]->inputs[1]);
-                                    
-                                    if ((indexA != -1) && (indexB != -1))
+                                    case 2:
                                     {
-                                        switch (nodes[i]->output.dataCount)
-                                        {
-                                            case 2:
-                                            {
-                                                Vector2 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value };
-                                                Vector2 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value };
-                                                Vector2 newVector = ((nodes[i]->type == FNODE_PROJECTION) ? FVector2Projection(vectorA, vectorB) : FVector2Rejection(vectorA, vectorB));
-                                                
-                                                nodes[i]->output.data[0].value = newVector.x;
-                                                nodes[i]->output.data[1].value = newVector.y;
-                                                
-                                                for (int j = 2; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
-                                                nodes[i]->output.dataCount = 2;
-                                            } break;
-                                            case 3:
-                                            {
-                                                Vector3 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value, nodes[indexA]->output.data[2].value };
-                                                Vector3 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value, nodes[indexB]->output.data[2].value };
-                                                Vector3 newVector = ((nodes[i]->type == FNODE_PROJECTION) ? FVector3Projection(vectorA, vectorB) : FVector3Rejection(vectorA, vectorB));
-                                                
-                                                nodes[i]->output.data[0].value = newVector.x;
-                                                nodes[i]->output.data[1].value = newVector.y;
-                                                nodes[i]->output.data[2].value = newVector.z;
-                                                
-                                                for (int j = 3; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
-                                                nodes[i]->output.dataCount = 3;
-                                            } break;
-                                            case 4:
-                                            {
-                                                Vector4 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value, nodes[indexA]->output.data[2].value, nodes[indexA]->output.data[3].value };
-                                                Vector4 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value, nodes[indexB]->output.data[2].value, nodes[indexB]->output.data[3].value };
-                                                Vector4 newVector = ((nodes[i]->type == FNODE_PROJECTION) ? FVector4Projection(vectorA, vectorB) : FVector4Rejection(vectorA, vectorB));
-                                                
-                                                nodes[i]->output.data[0].value = newVector.x;
-                                                nodes[i]->output.data[1].value = newVector.y;
-                                                nodes[i]->output.data[2].value = newVector.z;
-                                                nodes[i]->output.data[3].value = newVector.w;
-                                                
-                                                for (int j = 4; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
-                                                nodes[i]->output.dataCount = 4;
-                                            } break;
-                                            default: break;
-                                        }
-                                    }
-                                    else TraceLogFNode(true, "error when trying to get node inputs index in a specific inputs node");
+                                        Vector2 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value };
+                                        Vector2 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value };
+                                        Vector2 newVector = ((nodes[i]->type == FNODE_PROJECTION) ? FVector2Projection(vectorA, vectorB) : FVector2Rejection(vectorA, vectorB));
+
+                                        nodes[i]->output.data[0].value = newVector.x;
+                                        nodes[i]->output.data[1].value = newVector.y;
+
+                                        for (int j = 2; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+                                        nodes[i]->output.dataCount = 2;
+                                    } break;
+                                    case 3:
+                                    {
+                                        Vector3 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value, nodes[indexA]->output.data[2].value };
+                                        Vector3 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value, nodes[indexB]->output.data[2].value };
+                                        Vector3 newVector = ((nodes[i]->type == FNODE_PROJECTION) ? FVector3Projection(vectorA, vectorB) : FVector3Rejection(vectorA, vectorB));
+
+                                        nodes[i]->output.data[0].value = newVector.x;
+                                        nodes[i]->output.data[1].value = newVector.y;
+                                        nodes[i]->output.data[2].value = newVector.z;
+
+                                        for (int j = 3; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+                                        nodes[i]->output.dataCount = 3;
+                                    } break;
+                                    case 4:
+                                    {
+                                        Vector4 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value, nodes[indexA]->output.data[2].value, nodes[indexA]->output.data[3].value };
+                                        Vector4 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value, nodes[indexB]->output.data[2].value, nodes[indexB]->output.data[3].value };
+                                        Vector4 newVector = ((nodes[i]->type == FNODE_PROJECTION) ? FVector4Projection(vectorA, vectorB) : FVector4Rejection(vectorA, vectorB));
+
+                                        nodes[i]->output.data[0].value = newVector.x;
+                                        nodes[i]->output.data[1].value = newVector.y;
+                                        nodes[i]->output.data[2].value = newVector.z;
+                                        nodes[i]->output.data[3].value = newVector.w;
+
+                                        for (int j = 4; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+                                        nodes[i]->output.dataCount = 4;
+                                    } break;
+                                    default: break;
                                 }
-                                else
-                                {
-                                    for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
-                                    nodes[i]->output.dataCount = 0;
-                                }
-                            } break;
-                            default: break;
-                        }
+                            }
+                            else
+                            {
+                                for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+                                nodes[i]->output.dataCount = 0;
+                            }
+                        } break;
+                        default: break;
                     }
-                    else TraceLogFNode(true, "(0) error trying to get inputs from node id %i due to index is out of bounds %i", nodes[i]->id, index);
                 }
                 else
                 {
@@ -1618,15 +1621,189 @@ void CalculateValues()
                     nodes[i]->output.dataCount = 0;
                 }
             }
-            
+
             if (nodes[i]->type > FNODE_VECTOR4)
             {
                 for (int k = 0; k < nodes[i]->output.dataCount; k++) FFloatToString(nodes[i]->output.data[k].valueText, nodes[i]->output.data[k].value);
             }
-            
+
             UpdateNodeShapes(nodes[i]);
         }
         else TraceLogFNode(true, "error trying to calculate values for a null referenced node");
+    }
+}
+
+// Compiles all node structure to create the GLSL fragment shader in output folder
+void CompileNodes()
+{
+    UnloadShader(shader);
+    remove(VERTEX_PATH);
+    remove(FRAGMENT_PATH);
+    FILE *vertexFile = fopen(VERTEX_PATH, "w");
+
+    // Vertex shader definition to embed, no external file required
+    const char vHeader[] = 
+    "#version 330                     \n\n";
+    fprintf(vertexFile, vHeader);
+
+    const char vIn[] = 
+    "in vec3 vertexPosition;            \n"
+    "in vec3 vertexNormal;              \n"
+    "in vec2 vertexTexCoord;            \n"
+    "in vec4 vertexColor;             \n\n";
+    fprintf(vertexFile, vIn);
+
+    const char vOut[] = 
+    "out vec3 fragPosition;             \n"
+    "out vec3 fragNormal;               \n"
+    "out vec2 fragTexCoord;             \n"
+    "out vec4 fragColor;              \n\n";
+    fprintf(vertexFile, vOut);
+
+    const char vUniforms[] = 
+    "uniform mat4 mvpMatrix;          \n\n";
+    fprintf(vertexFile, vUniforms);
+
+    const char vMain[] = 
+    "void main()                        \n"
+    "{                                  \n"
+    "    fragPosition = vertexPosition; \n"
+    "    fragNormal = vertexNormal;     \n"
+    "    fragTexCoord = vertexTexCoord; \n"
+    "    fragColor = vertexColor;       \n"
+    "    gl_Position = mvpMatrix*vec4(vertexPosition, 1.0); \n"
+    "}                                  \n";
+    fprintf(vertexFile, vMain);
+    fclose(vertexFile);
+
+    remove(FRAGMENT_PATH);
+    FILE *fragmentFile = fopen(FRAGMENT_PATH, "w");
+
+    // Fragment shader definition to embed, no external file required
+    const char fHeader[] = 
+    "#version 330                     \n\n";
+    fprintf(fragmentFile, fHeader);
+
+    const char fIn[] = 
+    "in vec3 fragPosition;             \n"
+    "in vec3 fragNormal;               \n"
+    "in vec2 fragTexCoord;             \n"
+    "in vec4 fragColor;              \n\n";
+    fprintf(fragmentFile, fIn);
+
+    const char fUniforms[] = 
+    "uniform sampler2D texture0;       \n"
+    "uniform vec4 colDiffuse;        \n\n";
+    fprintf(fragmentFile, fUniforms);
+
+    const char fOut[] = 
+    "out vec4 finalColor;            \n\n";
+    fprintf(fragmentFile, fOut);
+
+    for (int i = 0; i < nodesCount; i++)
+    {
+        switch (nodes[i]->type)
+        {
+            case FNODE_VALUE:
+            {
+                const char fConstantValue[] = "const float node_%02i = %.3f;\n";
+                fprintf(fragmentFile, fConstantValue, nodes[i]->id, nodes[i]->output.data[0].value);
+            }
+            case FNODE_VECTOR2:
+            {
+                const char fConstantVector2[] = "const vec2 node_%02i = vec2(%.3f, %.3f);\n";
+                fprintf(fragmentFile, fConstantVector2, nodes[i]->id, nodes[i]->output.data[0].value, nodes[i]->output.data[1].value);
+            }
+            case FNODE_VECTOR3:
+            {
+                const char fConstantVector3[] = "const vec3 node_%02i = vec3(%.3f, %.3f, %.3f);\n";
+                fprintf(fragmentFile, fConstantVector3, nodes[i]->id, nodes[i]->output.data[0].value, nodes[i]->output.data[1].value, nodes[i]->output.data[2].value);
+            }
+            case FNODE_VECTOR4:
+            {
+                const char fConstantVector4[] = "const vec4 node_%02i = vec4(%.3f, %.3f, %.3f, %.3f);\n";
+                fprintf(fragmentFile, fConstantVector4, nodes[i]->id, nodes[i]->output.data[0].value, nodes[i]->output.data[1].value, nodes[i]->output.data[2].value, nodes[i]->output.data[3].value);
+            }
+            default: break;
+        }
+    }
+
+    const char fMain[] = 
+    "\n"
+    "void main()                        \n"
+    "{                                  \n";
+    fprintf(fragmentFile, fMain);
+
+    int index = GetNodeIndex(nodes[0]->inputs[0]);
+    CompileNode(nodes[index], fragmentFile);
+    fprintf(fragmentFile, "\n    finalColor = node_%02i;\n}", nodes[0]->inputs[0]);
+
+    fclose(fragmentFile);
+
+    shader = LoadShader(VERTEX_PATH, FRAGMENT_PATH);
+    model.material.shader = shader;
+}
+
+// Compiles a specific node checking its inputs and writing current node operation in shader
+void CompileNode(FNode node, FILE *file)
+{
+    // Check if current node is an operator
+    if (node->inputsCount > 0)
+    {
+        // Check for operator nodes in inputs to compile them first
+        for (int i = 0; i < node->inputsCount; i++)
+        {
+            int index = GetNodeIndex(node->inputs[i]);
+            if (nodes[index]->type > FNODE_VECTOR4 || nodes[index]->type < FNODE_VALUE) CompileNode(nodes[index], file);
+        }
+
+        // Store variable declaration into a string
+        char check[16] = { '\0' };
+        switch (node->output.dataCount)
+        {
+            case 1: sprintf(check, "vec1 node_%02i", node->id); break;
+            case 2: sprintf(check, "vec2 node_%02i", node->id); break;
+            case 3: sprintf(check, "vec3 node_%02i", node->id); break;
+            case 4: sprintf(check, "vec4 node_%02i", node->id); break;
+        }
+        
+        // Check if current node is previously defined and declared
+        if (!FSearch(FRAGMENT_PATH, check))
+        {
+            // Variable definition based on current node output data count
+            char body[1024] = { '\0' };
+            char definition[32] = { '\0' };
+            switch (node->output.dataCount)
+            {
+                case 1: sprintf(definition, "    vec1 node_%02i = ", node->id); break;
+                case 2: sprintf(definition, "    vec2 node_%02i = ", node->id); break;
+                case 3: sprintf(definition, "    vec3 node_%02i = ", node->id); break;
+                case 4: sprintf(definition, "    vec4 node_%02i = ", node->id); break;
+            }
+            strcat(body, definition);
+
+            // Operate with each input node
+            for (int i = 0; i < node->inputsCount; i++)
+            {
+                char temp[32] = { '\0' };
+                if ((i+1) == node->inputsCount) sprintf(temp, "node_%02i;\n", node->inputs[i]);
+                else
+                {
+                    sprintf(temp, "node_%02i", node->inputs[i]);
+                    switch (node->type)
+                    {
+                        case FNODE_ADD: strcat(temp, " + "); break;
+                        case FNODE_SUBTRACT: strcat(temp, " - "); break;
+                        case FNODE_MULTIPLY: strcat(temp, "*"); break;
+                        case FNODE_DIVIDE: strcat(temp, "/"); break;
+                    }
+                }
+                strcat(body, temp);
+            }
+
+            // Write current node string to shader file
+            fprintf(file, body);
+        }
     }
 }
 
@@ -1642,7 +1819,7 @@ void UpdateNodeShapes(FNode node)
             node->output.data[i].shape.x = node->shape.x + 5;
             node->output.data[i].shape.width = NODE_DATA_WIDTH;
             node->output.data[i].shape.width += MeasureText(node->output.data[i].valueText, 20);
-            
+
             if (i == 0) node->output.data[i].shape.y = node->shape.y + 5;
             else node->output.data[i].shape.y = node->output.data[i - 1].shape.y + node->output.data[i - 1].shape.height + 5;
 
@@ -1653,29 +1830,28 @@ void UpdateNodeShapes(FNode node)
                 currentLength = length;
             }
         }
-        
+
         node->shape.width = 10 + NODE_DATA_WIDTH;
         if (index != -1) node->shape.width += MeasureText(node->output.data[index].valueText, 20);
         else if (node->output.dataCount > 0)
         {
             bool isError = false;
-            
+
             for (int i = 0; i < node->output.dataCount; i++)
             {
                 if (node->output.data[i].valueText[0] != '\0') isError = true;
             }
-            
+
             if (isError) TraceLogFNode(true, "error trying to calculate node data longest value");
         }
-        
+
         if (node->type >= FNODE_ADD)
         {
             node->shape.height = ((node->output.dataCount == 0) ? (NODE_DATA_HEIGHT/2 + 10) : ((NODE_DATA_HEIGHT + 5)*node->output.dataCount + 5));
-            
             node->inputShape.x = node->shape.x - 20;
             node->inputShape.y = node->shape.y + node->shape.height/2 - 10;
         }
-        
+
         node->outputShape.x = node->shape.x + node->shape.width;
         node->outputShape.y = node->shape.y + node->shape.height/2 - 10;
     }
@@ -1692,31 +1868,23 @@ void UpdateCommentShapes(FComment comment)
             if (comment->shape.width < MIN_COMMENT_SIZE) comment->shape.width = MIN_COMMENT_SIZE;
             if (comment->shape.height < MIN_COMMENT_SIZE) comment->shape.height = MIN_COMMENT_SIZE;
         }
-        
+
         comment->valueShape.x = comment->shape.x + 10;
         comment->valueShape.y = comment->shape.y - UI_COMMENT_HEIGHT - 5;
-        
         comment->sizeTShape.x = comment->shape.x + comment->shape.width/2 - comment->sizeTShape.width/2;
         comment->sizeTShape.y = comment->shape.y - comment->sizeTShape.height/2;
-        
         comment->sizeBShape.x = comment->shape.x + comment->shape.width/2 - comment->sizeBShape.width/2;
         comment->sizeBShape.y = comment->shape.y + comment->shape.height - comment->sizeBShape.height/2;
-        
         comment->sizeLShape.x = comment->shape.x - comment->sizeLShape.width/2;
         comment->sizeLShape.y = comment->shape.y + comment->shape.height/2 - comment->sizeLShape.height/2;
-        
         comment->sizeRShape.x = comment->shape.x + comment->shape.width - comment->sizeRShape.width/2;
         comment->sizeRShape.y = comment->shape.y + comment->shape.height/2 - comment->sizeRShape.height/2;
-        
         comment->sizeTlShape.x = comment->shape.x - comment->sizeTlShape.width/2;
         comment->sizeTlShape.y = comment->shape.y - comment->sizeTlShape.height/2;
-        
         comment->sizeTrShape.x = comment->shape.x + comment->shape.width - comment->sizeTrShape.width/2;
         comment->sizeTrShape.y = comment->shape.y - comment->sizeTrShape.height/2;
-        
         comment->sizeBlShape.x = comment->shape.x - comment->sizeBlShape.width/2;
         comment->sizeBlShape.y = comment->shape.y + comment->shape.height - comment->sizeBlShape.height/2;
-        
         comment->sizeBrShape.x = comment->shape.x + comment->shape.width - comment->sizeBrShape.width/2;
         comment->sizeBrShape.y = comment->shape.y + comment->shape.height - comment->sizeBrShape.height/2;
     }
@@ -1729,17 +1897,17 @@ void AlignNode(FNode node)
     int spacing = 0;
     float currentDistance = 999999;
     int currentSpacing = 0;
-    
+
     for (int j = 0; j < UI_GRID_COUNT*5; j++)
     {
         float temp = abs(node->shape.x - (-(UI_GRID_COUNT/2*UI_GRID_SPACING*5) + spacing));
-        
+
         if (currentDistance > temp)
         {
             currentDistance = temp;
             currentSpacing = spacing;
         }
-        
+
         spacing += UI_GRID_SPACING;
     }
 
@@ -1781,31 +1949,36 @@ void ClearUnusedNodes()
 {
     for (int i = nodesCount - 1; i >= 0; i--)
     {
-        bool used = false;
-        
-        for (int k = 0; k < linesCount; k++)
+        bool used = (nodes[i]->type == FNODE_MAIN);
+
+        if (!used)
         {
-            if (nodes[i]->id == lines[k]->from || nodes[i]->id == lines[k]->to)
+            for (int k = 0; k < linesCount; k++)
             {
-                used = true;
-                break;
+                if ((nodes[i]->id == lines[k]->from) || (nodes[i]->id == lines[k]->to))
+                {
+                    used = true;
+                    break;
+                }
             }
         }
-        
+
         if (!used) DestroyNode(nodes[i]);
     }
-    
+
     TraceLogFNode(false, "all unused nodes have been deleted [USED RAM: %i bytes]", usedMemory);
 }
 
 // Destroys all created nodes and its linked lines
 void ClearGraph()
 {
-    for (int i = nodesCount - 1; i >= 0; i--) DestroyNode(nodes[i]);
+    for (int i = nodesCount - 1; i >= 0; i--)
+    {
+        if (nodes[i]->type != FNODE_MAIN) DestroyNode(nodes[i]);
+    }
     for (int i = commentsCount - 1; i >= 0; i--) DestroyComment(comments[i]);
-    
-    if (usedMemory != 0) TraceLogFNode(true, "all nodes have been deleted by there are still memory in use [USED RAM: %i bytes]", usedMemory);
-    else TraceLogFNode(false, "all nodes have been deleted [USED RAM: %i bytes]", usedMemory);
+
+    TraceLogFNode(false, "all nodes have been deleted [USED RAM: %i bytes]", usedMemory);
 }
 
 // Draw canvas space to create nodes
@@ -1814,16 +1987,16 @@ void DrawCanvas()
     // Draw background title and credits
     DrawText("FNODE 1.0", (canvasSize.x - MeasureText("FNODE 1.0", 120))/2, canvasSize.y/2 - 60, 120, Fade(LIGHTGRAY, UI_GRID_ALPHA*2));
     DrawText("VICTOR FISAC", (canvasSize.x - MeasureText("VICTOR FISAC", 40))/2, canvasSize.y*0.65f - 20, 40, Fade(LIGHTGRAY, UI_GRID_ALPHA*2));
-    
+
     Begin2dMode(camera);
-    
+
         DrawCanvasGrid(UI_GRID_COUNT);
-        
+
         // Draw all created comments, lines and nodes
         for (int i = 0; i < commentsCount; i++) DrawComment(comments[i]);
         for (int i = 0; i < nodesCount; i++) DrawNode(nodes[i]);        
         for (int i = 0; i < linesCount; i++) DrawNodeLine(lines[i]);
-        
+
     End2dMode();
 }
 
@@ -1839,7 +2012,7 @@ void DrawCanvasGrid(int divisions)
             spacing += UI_GRID_SPACING;
         }
     }
-    
+
     spacing = 0;
     for (int i = 0; i < divisions; i++)
     {
@@ -1851,74 +2024,104 @@ void DrawCanvasGrid(int divisions)
     }
 }
 
+// Draws a visor with default model rotating and current shader
+void DrawVisor()
+{
+    BeginTextureMode(visorTarget);
+    
+        DrawRectangle(0, 0, screenSize.x, screenSize.y, GRAY);
+
+        Begin3dMode(camera3d);
+
+            DrawModelEx(model, (Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){ 0, 1, 0 }, modelRotation, (Vector3){ 0.13f, 0.13f, 0.13f }, WHITE);
+
+        End3dMode();
+
+    EndTextureMode();
+    
+    Rectangle visor = { canvasSize.x - visorTarget.texture.width - UI_PADDING, screenSize.y - visorTarget.texture.height - UI_PADDING, visorTarget.texture.width, visorTarget.texture.height };
+    DrawRectangle(visor.x - VISOR_BORDER, visor.y - VISOR_BORDER, visor.width + VISOR_BORDER*2, visor.height + VISOR_BORDER*2, BLACK);
+    
+    BeginShaderMode(fxaa);
+
+        DrawTexturePro(visorTarget.texture, (Rectangle){ 0, 0, visorTarget.texture.width, -visorTarget.texture.height }, visor, (Vector2){ 0, 0 }, 0.0f, WHITE);
+
+    EndShaderMode();
+}
+
 // Draw interface to create nodes
 void DrawInterface()
 {
     // Draw interface background
     DrawRectangleRec((Rectangle){ canvasSize.x, 0.0f, screenSize.x - canvasSize.x, screenSize.y }, DARKGRAY);
-    
+
     // Draw interface main buttons
-    if (FButton((Rectangle){ UI_PADDING, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Clear Graph")) ClearGraph(); menuOffset = 1;
+    if (FButton((Rectangle){ UI_PADDING, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Compile")) CompileNodes(); menuOffset = 1;
+    if (FButton((Rectangle){ UI_PADDING + ((screenSize.x - canvasSize.x - UI_PADDING*2)/2 + UI_PADDING)*menuOffset, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Clear Graph")) ClearGraph();
     if (FButton((Rectangle){ UI_PADDING + ((screenSize.x - canvasSize.x - UI_PADDING*2)/2 + UI_PADDING)*menuOffset, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Align Nodes")) AlignAllNodes();
     if (FButton((Rectangle){ UI_PADDING + ((screenSize.x - canvasSize.x - UI_PADDING*2)/2 + UI_PADDING)*menuOffset, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Clear Unused Nodes")) ClearUnusedNodes();
-    
+
     // Draw interface nodes buttons
     DrawText("Constant Vectors", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Constant Vectors", 10))/2, UI_PADDING*4 - menuScroll, 10, WHITE); menuOffset = 1;
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Value")) CreateNodeValue((float)GetRandomValue(-11, 10));
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector 2")) CreateNodeVector2((Vector2){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector 3")) CreateNodeVector3((Vector3){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector 4")) CreateNodeVector4((Vector4){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Matrix 4x4")) CreateNodeMatrix(FMatrixIdentity());
-    
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Value")) CreateNodeValue((float)GetRandomValue(-11, 10));
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vector 2")) CreateNodeVector2((Vector2){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vector 3")) CreateNodeVector3((Vector3){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vector 4")) CreateNodeVector4((Vector4){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Matrix 4x4")) CreateNodeMatrix(FMatrixIdentity());
+
     DrawText("Arithmetic", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Arithmetic", 10))/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*6 - menuScroll, 10, WHITE); menuOffset++;
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Add")) CreateNodeOperator(FNODE_ADD, "Add", MAX_INPUTS);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Subtract")) CreateNodeOperator(FNODE_SUBTRACT, "Subtract", MAX_INPUTS);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Multiply")) CreateNodeOperator(FNODE_MULTIPLY, "Multiply", MAX_INPUTS);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Multiply Matrix")) CreateNodeOperator(FNODE_MULTIPLYMATRIX, "Multiply Matrix", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Divide")) CreateNodeOperator(FNODE_DIVIDE, "Divide", MAX_INPUTS);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "One Minus")) CreateNodeOperator(FNODE_ONEMINUS, "One Minus", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Abs")) CreateNodeOperator(FNODE_ABS, "Abs", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Clamp 0-1")) CreateNodeOperator(FNODE_CLAMP01, "Clamp 0-1", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Max")) CreateNodeOperator(FNODE_MAX, "Max", MAX_INPUTS);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Min")) CreateNodeOperator(FNODE_MIN, "Min", MAX_INPUTS);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Negate")) CreateNodeOperator(FNODE_NEGATE, "Negate", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Noise")) CreateNodeOperator(FNODE_NOISE, "Noise", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Noise Int")) CreateNodeOperator(FNODE_NOISEINT, "Noise Int", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Reciprocal")) CreateNodeOperator(FNODE_RECIPROCAL, "Reciprocal", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Square Root")) CreateNodeOperator(FNODE_SQRT, "Square Root", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Power")) CreateNodeOperator(FNODE_POWER, "Power", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Exp 2")) CreateNodeOperator(FNODE_EXP2, "Exp 2", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Posterize")) CreateNodeOperator(FNODE_POSTERIZE, "Posterize", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Ceil")) CreateNodeOperator(FNODE_CEIL, "Ceil", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Round")) CreateNodeOperator(FNODE_ROUND, "Round", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Trunc")) CreateNodeOperator(FNODE_TRUNC, "Trunc", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Lerp")) CreateNodeOperator(FNODE_LERP, "Lerp", 3);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Step")) CreateNodeOperator(FNODE_STEP, "Step", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "SmoothStep")) CreateNodeOperator(FNODE_SMOOTHSTEP, "SmoothStep", 3);
-    
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Add")) CreateNodeOperator(FNODE_ADD, "Add", MAX_INPUTS);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Subtract")) CreateNodeOperator(FNODE_SUBTRACT, "Subtract", MAX_INPUTS);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Multiply")) CreateNodeOperator(FNODE_MULTIPLY, "Multiply", MAX_INPUTS);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Multiply Matrix")) CreateNodeOperator(FNODE_MULTIPLYMATRIX, "Multiply Matrix", 2);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Divide")) CreateNodeOperator(FNODE_DIVIDE, "Divide", MAX_INPUTS);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "One Minus")) CreateNodeOperator(FNODE_ONEMINUS, "One Minus", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Abs")) CreateNodeOperator(FNODE_ABS, "Abs", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Clamp 0-1")) CreateNodeOperator(FNODE_CLAMP01, "Clamp 0-1", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Max")) CreateNodeOperator(FNODE_MAX, "Max", MAX_INPUTS);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Min")) CreateNodeOperator(FNODE_MIN, "Min", MAX_INPUTS);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Negate")) CreateNodeOperator(FNODE_NEGATE, "Negate", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Noise")) CreateNodeOperator(FNODE_NOISE, "Noise", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Noise Int")) CreateNodeOperator(FNODE_NOISEINT, "Noise Int", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Reciprocal")) CreateNodeOperator(FNODE_RECIPROCAL, "Reciprocal", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Square Root")) CreateNodeOperator(FNODE_SQRT, "Square Root", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Power")) CreateNodeOperator(FNODE_POWER, "Power", 2);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Exp 2")) CreateNodeOperator(FNODE_EXP2, "Exp 2", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Posterize")) CreateNodeOperator(FNODE_POSTERIZE, "Posterize", 2);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Ceil")) CreateNodeOperator(FNODE_CEIL, "Ceil", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Round")) CreateNodeOperator(FNODE_ROUND, "Round", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Trunc")) CreateNodeOperator(FNODE_TRUNC, "Trunc", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Lerp")) CreateNodeOperator(FNODE_LERP, "Lerp", 3);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Step")) CreateNodeOperator(FNODE_STEP, "Step", 2);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "SmoothStep")) CreateNodeOperator(FNODE_SMOOTHSTEP, "SmoothStep", 3);
+
     DrawText("Vector Operations", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Vector Operations", 10))/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*31 - menuScroll, 10, WHITE); menuOffset++;
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Append")) CreateNodeOperator(FNODE_APPEND, "Append", MAX_INPUTS);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Normalize")) CreateNodeOperator(FNODE_NORMALIZE, "Normalize", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Cross Product")) CreateNodeOperator(FNODE_CROSSPRODUCT, "Cross Product", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Desaturate")) CreateNodeOperator(FNODE_DESATURATE, "Desaturate", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Distance")) CreateNodeOperator(FNODE_DISTANCE, "Distance", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Dot Product")) CreateNodeOperator(FNODE_DOTPRODUCT, "Dot Product", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Length")) CreateNodeOperator(FNODE_LENGTH, "Length", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Transpose")) CreateNodeOperator(FNODE_TRANSPOSE, "Transpose", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector Projection")) CreateNodeOperator(FNODE_PROJECTION, "Vector Projection", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector Rejection")) CreateNodeOperator(FNODE_REJECTION, "Vector Rejection", 2);
-    
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Append")) CreateNodeOperator(FNODE_APPEND, "Append", MAX_INPUTS);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Normalize")) CreateNodeOperator(FNODE_NORMALIZE, "Normalize", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Cross Product")) CreateNodeOperator(FNODE_CROSSPRODUCT, "Cross Product", 2);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Desaturate")) CreateNodeOperator(FNODE_DESATURATE, "Desaturate", 2);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Distance")) CreateNodeOperator(FNODE_DISTANCE, "Distance", 2);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Dot Product")) CreateNodeOperator(FNODE_DOTPRODUCT, "Dot Product", 2);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Length")) CreateNodeOperator(FNODE_LENGTH, "Length", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Transpose")) CreateNodeOperator(FNODE_TRANSPOSE, "Transpose", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vector Projection")) CreateNodeOperator(FNODE_PROJECTION, "Vector Projection", 2);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vector Rejection")) CreateNodeOperator(FNODE_REJECTION, "Vector Rejection", 2);
+
     DrawText("Math Constants", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Math Constants", 10))/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*42 - menuScroll, 10, WHITE); menuOffset++;
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "PI")) CreateNodePI();
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "e")) CreateNodeE();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "PI")) CreateNodePI();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "e")) CreateNodeE();
 
     DrawText("Trigonometry", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Trigonometry", 10))/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*45 - menuScroll, 10, WHITE); menuOffset++;
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Cosine")) CreateNodeOperator(FNODE_COS, "Cosine", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Sine")) CreateNodeOperator(FNODE_SIN, "Sine", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Tangent")) CreateNodeOperator(FNODE_TAN, "Tangent", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Deg to Rad")) CreateNodeOperator(FNODE_DEG2RAD, "Deg to Rad", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Rad to Deg")) CreateNodeOperator(FNODE_RAD2DEG, "Rad to Deg", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Cosine")) CreateNodeOperator(FNODE_COS, "Cosine", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Sine")) CreateNodeOperator(FNODE_SIN, "Sine", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Tangent")) CreateNodeOperator(FNODE_TAN, "Tangent", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Deg to Rad")) CreateNodeOperator(FNODE_DEG2RAD, "Deg to Rad", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Rad to Deg")) CreateNodeOperator(FNODE_RAD2DEG, "Rad to Deg", 1);
     
+    DrawRectangle(canvasSize.x + screenSize.x - canvasSize.x - UI_PADDING - UI_PADDING_SCROLL + 3, 2, UI_PADDING_SCROLL - 3, screenSize.y - 4, (Color){ UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, 255 });
+    DrawRectangle(menuScrollRec.x - 2, menuScrollRec.y - 2, menuScrollRec.width + 4, menuScrollRec.height + 4, DARKGRAY);
+    DrawRectangleRec(menuScrollRec, ((scrollState == 1) ? LIGHTGRAY : RAYWHITE));
+
     if (debugMode)
     {
         const char *string = 
@@ -1931,9 +2134,9 @@ void DrawInterface()
         "editSizeType: %i\n"
         "editComment: %i\n"
         "editNodeText: %s";
-        
+
         DrawText(FormatText(string, selectedNode, editNode, lineState, commentState, selectedComment, editSize, editSizeType, editComment, ((editNodeText != NULL) ? editNodeText : "NULL")), 10, 30, 10, BLACK);
-        
+
         DrawFPS(10, 10);
     }
 }
@@ -1958,7 +2161,9 @@ void InitFNode()
     commentsCount = 0;
     selectedCommentNodesCount = 0;
     for (int i = 0; i < MAX_NODES; i++) selectedCommentNodes[i] = -1;
-    
+
+    CreateNodeMain();
+
     TraceLogFNode(false, "initialization complete");
 }
 
@@ -1966,16 +2171,16 @@ void InitFNode()
 FNode CreateNodePI()
 {
     FNode newNode = InitializeNode(false);
-    
+
     newNode->type = FNODE_PI;
     newNode->name = "PI";
     newNode->output.dataCount = 1;
     newNode->output.data[0].value = PI;
     FFloatToString(newNode->output.data[0].valueText, newNode->output.data[0].value);
     newNode->inputsLimit = 0;
-    
+
     UpdateNodeShapes(newNode);
-    
+
     return newNode;
 }
 
@@ -1983,16 +2188,16 @@ FNode CreateNodePI()
 FNode CreateNodeE()
 {
     FNode newNode = InitializeNode(false);
-    
+
     newNode->type = FNODE_E;
     newNode->name = "e";
     newNode->output.dataCount = 1;
     newNode->output.data[0].value = 2.71828182845904523536;
     FFloatToString(newNode->output.data[0].valueText, newNode->output.data[0].value);
     newNode->inputsLimit = 0;
-    
+
     UpdateNodeShapes(newNode);
-    
+
     return newNode;
 }
 
@@ -2000,7 +2205,7 @@ FNode CreateNodeE()
 FNode CreateNodeMatrix(Matrix mat)
 {
     FNode newNode = InitializeNode(false);
-    
+
     newNode->type = FNODE_MATRIX;
     newNode->name = "Matrix (4x4)";
     newNode->output.dataCount = 16;
@@ -2023,7 +2228,7 @@ FNode CreateNodeMatrix(Matrix mat)
     for (int i = 0; i < newNode->output.dataCount; i++) FFloatToString(newNode->output.data[i].valueText, newNode->output.data[i].value);
     newNode->shape.height = (NODE_DATA_HEIGHT + 5)*newNode->output.dataCount + 5;
     newNode->inputsLimit = 0;
-    
+
     UpdateNodeShapes(newNode);
 }
 
@@ -2031,7 +2236,7 @@ FNode CreateNodeMatrix(Matrix mat)
 FNode CreateNodeValue(float value)
 {
     FNode newNode = InitializeNode(false);
-    
+
     newNode->type = FNODE_VALUE;
     newNode->name = "Value";
     newNode->output.dataCount = 1;
@@ -2040,7 +2245,7 @@ FNode CreateNodeValue(float value)
     newNode->inputsLimit = 0;
 
     UpdateNodeShapes(newNode);
-    
+
     return newNode;
 }
 
@@ -2048,7 +2253,7 @@ FNode CreateNodeValue(float value)
 FNode CreateNodeVector2(Vector2 vector)
 {
     FNode newNode = InitializeNode(false);
-    
+
     newNode->type = FNODE_VECTOR2;
     newNode->name = "Vector 2";
     newNode->output.dataCount = 2;
@@ -2057,7 +2262,7 @@ FNode CreateNodeVector2(Vector2 vector)
     for (int i = 0; i < newNode->output.dataCount; i++) FFloatToString(newNode->output.data[i].valueText, newNode->output.data[i].value);
     newNode->shape.height = (NODE_DATA_HEIGHT + 5)*newNode->output.dataCount + 5;
     newNode->inputsLimit = 0;
-    
+
     UpdateNodeShapes(newNode);
 }
 
@@ -2065,7 +2270,7 @@ FNode CreateNodeVector2(Vector2 vector)
 FNode CreateNodeVector3(Vector3 vector)
 {
     FNode newNode = InitializeNode(false);
-    
+
     newNode->type = FNODE_VECTOR3;
     newNode->name = "Vector 3";
     newNode->output.dataCount = 3;
@@ -2075,7 +2280,7 @@ FNode CreateNodeVector3(Vector3 vector)
     for (int i = 0; i < newNode->output.dataCount; i++) FFloatToString(newNode->output.data[i].valueText, newNode->output.data[i].value);
     newNode->shape.height = (NODE_DATA_HEIGHT + 5)*newNode->output.dataCount + 5;
     newNode->inputsLimit = 0;
-    
+
     UpdateNodeShapes(newNode);
 }
 
@@ -2083,7 +2288,7 @@ FNode CreateNodeVector3(Vector3 vector)
 FNode CreateNodeVector4(Vector4 vector)
 {
     FNode newNode = InitializeNode(false);
-    
+
     newNode->type = FNODE_VECTOR4;
     newNode->name = "Vector 4";
     newNode->output.dataCount = 4;
@@ -2094,7 +2299,7 @@ FNode CreateNodeVector4(Vector4 vector)
     for (int i = 0; i < newNode->output.dataCount; i++) FFloatToString(newNode->output.data[i].valueText, newNode->output.data[i].value);
     newNode->shape.height = (NODE_DATA_HEIGHT + 5)*newNode->output.dataCount + 5;
     newNode->inputsLimit = 0;
-    
+
     UpdateNodeShapes(newNode);
 }
 
@@ -2102,13 +2307,29 @@ FNode CreateNodeVector4(Vector4 vector)
 FNode CreateNodeOperator(FNodeType type, const char *name, int inputs)
 {
     FNode newNode = InitializeNode(true);
-    
+
     newNode->type = type;
     newNode->name = name;
     newNode->inputsLimit = inputs;
 
     UpdateNodeShapes(newNode);
-    
+
+    return newNode;
+}
+
+// Creates the main node that contains final fragment color
+FNode CreateNodeMain()
+{
+    FNode newNode = InitializeNode(true);
+
+    newNode->type = FNODE_MAIN;
+    newNode->name = "Fragment Color";
+    newNode->inputsLimit = 1;
+    newNode->outputShape.width = 0;
+    newNode->outputShape.height = 0;
+
+    UpdateNodeShapes(newNode);
+
     return newNode;
 }
 
@@ -2117,12 +2338,12 @@ FNode InitializeNode(bool isOperator)
 {
     FNode newNode = (FNode)FNODE_MALLOC(sizeof(FNodeData));
     usedMemory += sizeof(FNodeData);
-    
+
     int id = -1;
     for (int i = 0; i < MAX_NODES; i++)
     {
         int currentId = i;
-        
+
         // Check if current id already exist in other node
         for (int k = 0; k < nodesCount; k++)
         {
@@ -2132,7 +2353,7 @@ FNode InitializeNode(bool isOperator)
                 break;
             }
         }
-        
+
         // If not exist, set it as new node id
         if (currentId == i)
         {
@@ -2140,27 +2361,27 @@ FNode InitializeNode(bool isOperator)
             break;
         }
     }
-    
+
     // Initialize node id
     if (id != -1) newNode->id = id;
     else TraceLogFNode(true, "node creation failed because there is any available id");
-    
+
     // Initialize node inputs and inputs count
     for (int i = 0; i < MAX_INPUTS; i++) newNode->inputs[i] = -1;
     newNode->inputsCount = 0;
     newNode->inputsLimit = MAX_INPUTS;
-    
+
     // Initialize shapes
     newNode->shape = (Rectangle){ GetRandomValue(-camera.offset.x + 0, -camera.offset.x + screenSize.x*0.85f - 50*4), GetRandomValue(-camera.offset.y + screenSize.y/2 - 20 - 100, camera.offset.y + screenSize.y/2 - 20 + 100), 10 + NODE_DATA_WIDTH, 40 };
     if (isOperator) newNode->inputShape = (Rectangle){ 0, 0, 20, 20 };
     else newNode->inputShape = (Rectangle){ 0, 0, 0, 0 };
     newNode->outputShape = (Rectangle){ 0, 0, 20, 20 };
-    
+
     AlignNode(newNode);
-    
+
     // Initialize node output and output values count
     newNode->output.dataCount = 0;
-    
+
     for (int i = 0; i < MAX_VALUES; i++)
     {
         newNode->output.data[i].value = 0.0f;
@@ -2169,12 +2390,12 @@ FNode InitializeNode(bool isOperator)
         usedMemory += MAX_NODE_LENGTH;
         for (int k = 0; k < MAX_NODE_LENGTH; k++) newNode->output.data[i].valueText[k] = '\0';
     }
-    
+
     nodes[nodesCount] = newNode;
     nodesCount++;
-    
+
     TraceLogFNode(false, "created new node id %i (index: %i) [USED RAM: %i bytes]", newNode->id, (nodesCount - 1), usedMemory);
-    
+
     return newNode;
 }
 
@@ -2182,7 +2403,7 @@ FNode InitializeNode(bool isOperator)
 int GetNodeIndex(int id)
 {
     int output = -1;
-    
+
     for (int i = 0; i < nodesCount; i++)
     {
         if (nodes[i]->id == id)
@@ -2192,6 +2413,8 @@ int GetNodeIndex(int id)
         }
     }
     
+    if (output == -1) TraceLogFNode(true, "error when trying to find a node index by its id");
+
     return output;
 }
 
@@ -2200,12 +2423,12 @@ FLine CreateNodeLine(int from)
 {
     FLine newLine = (FLine)FNODE_MALLOC(sizeof(FLineData));
     usedMemory += sizeof(FLineData);
-    
+
     int id = -1;
     for (int i = 0; i < MAX_LINES; i++)
     {
         int currentId = i;
-        
+
         // Check if current id already exist in other line
         for (int k = 0; k < linesCount; k++)
         {
@@ -2215,7 +2438,7 @@ FLine CreateNodeLine(int from)
                 break;
             }
         }
-        
+
         // If not exist, set it as new line id
         if (currentId == i)
         {
@@ -2223,20 +2446,20 @@ FLine CreateNodeLine(int from)
             break;
         }
     }
-    
+
     // Initialize line id
     if (id != -1) newLine->id = id;
     else TraceLogFNode(true, "line creation failed because there is any available id");
-    
+
     // Initialize line input
     newLine->from = from;
     newLine->to = -1;
-    
+
     lines[linesCount] = newLine;
     linesCount++;
-    
+
     TraceLogFNode(false, "created new line id %i (index: %i) [USED RAM: %i bytes]", newLine->id, (linesCount - 1), usedMemory);
-    
+
     return newLine;
 }
 
@@ -2245,12 +2468,12 @@ FComment CreateComment()
 {
     FComment newComment = (FComment)FNODE_MALLOC(sizeof(FCommentData));
     usedMemory += sizeof(FCommentData);
-    
+
     int id = -1;
     for (int i = 0; i < MAX_COMMENTS; i++)
     {
         int currentId = i;
-        
+
         // Check if current id already exist in other comment
         for (int k = 0; k < commentsCount; k++)
         {
@@ -2260,7 +2483,7 @@ FComment CreateComment()
                 break;
             }
         }
-        
+
         // If not exist, set it as new comment id
         if (currentId == i)
         {
@@ -2268,11 +2491,11 @@ FComment CreateComment()
             break;
         }
     }
-    
+
     // Initialize comment id
     if (id != -1) newComment->id = id;
     else TraceLogFNode(true, "comment creation failed because there is any available id");
-    
+
     // Initialize comment input
     newComment->value = (char *)FNODE_MALLOC(MAX_COMMENT_LENGTH);
     usedMemory += MAX_COMMENT_LENGTH;
@@ -2289,6 +2512,7 @@ FComment CreateComment()
         else if (i == 8) newComment->value[i] = 'e';
         else newComment->value[i] = '\0';
     }
+    
     newComment->shape = (Rectangle){ 0, 0, 0, 0 };
     newComment->valueShape = (Rectangle){ 0, 0, UI_COMMENT_WIDTH, UI_COMMENT_HEIGHT };
     newComment->sizeTShape = (Rectangle){ 0, 0, 40, 10 };
@@ -2299,12 +2523,12 @@ FComment CreateComment()
     newComment->sizeTrShape = (Rectangle){ 0, 0, 10, 10 };
     newComment->sizeBlShape = (Rectangle){ 0, 0, 10, 10 };
     newComment->sizeBrShape = (Rectangle){ 0, 0, 10, 10 };
-    
+
     comments[commentsCount] = newComment;
     commentsCount++;
-    
+
     TraceLogFNode(false, "created new comment id %i (index: %i) [USED RAM: %i bytes]", newComment->id, (commentsCount - 1), usedMemory);
-    
+
     return newComment;
 }
 
@@ -2316,14 +2540,14 @@ void DrawNode(FNode node)
         DrawRectangleRec(node->shape, ((node->id == selectedNode) ? GRAY : LIGHTGRAY));
         DrawRectangleLines(node->shape.x, node->shape.y, node->shape.width, node->shape.height, BLACK);
         DrawText(FormatText("%s [ID: %i]", node->name, node->id), node->shape.x + node->shape.width/2 - MeasureText(FormatText("%s [ID: %i]", node->name, node->id), 10)/2, node->shape.y - 15, 10, BLACK);
-        
+
         if ((node->type >= FNODE_MATRIX) && (node->type <= FNODE_VECTOR4))
         {
             if (node->id == editNode)
             {
                 int charac = -1;
                 charac = GetKeyPressed();
-              
+
                 if (charac != -1)
                 {
                     if (charac == KEY_BACKSPACE)
@@ -2336,9 +2560,9 @@ void DrawNode(FNode node)
                                 break;
                             }
                         }
-                        
+
                         node->output.data[editNodeType].valueText[MAX_NODE_LENGTH - 1] = '\0';
-                        
+
                         UpdateNodeShapes(node);
                     }
                     else if (charac == KEY_ENTER)
@@ -2349,18 +2573,16 @@ void DrawNode(FNode node)
                         {
                             FStringToFloat(&node->output.data[editNodeType].value, (const char*)node->output.data[editNodeType].valueText);
                             FFloatToString(node->output.data[editNodeType].valueText, node->output.data[editNodeType].value);
-                            
+
                             CalculateValues();
                         }
                         else
                         {
                             TraceLogFNode(false, "error when trying to change node id %i value due to invalid characters (%s)", node->id, node->output.data[editNodeType].valueText);
-                            
                             for (int i = 0; i < MAX_NODE_LENGTH; i++) node->output.data[editNodeType].valueText[i] = editNodeText[i];
                         }
-                        
+
                         UpdateNodeShapes(node);
-                        
                         editNode = -1;
                         editNodeType = -1;
                         FNODE_FREE(editNodeText);
@@ -2377,7 +2599,6 @@ void DrawNode(FNode node)
                                 if (node->output.data[editNodeType].valueText[i] == '\0')
                                 {
                                     node->output.data[editNodeType].valueText[i] = (char)charac;
-                                    
                                     UpdateNodeShapes(node);
                                     break;
                                 }
@@ -2387,7 +2608,7 @@ void DrawNode(FNode node)
                 }
             }
         }
-        
+
         for (int i = 0; i < node->output.dataCount; i++)
         {
             if ((node->type >= FNODE_MATRIX) && (node->type <= FNODE_VECTOR4)) DrawRectangleLines(node->output.data[i].shape.x,node->output.data[i].shape.y, node->output.data[i].shape.width, node->output.data[i].shape.height, (((editNode == node->id) && (editNodeType == i)) ? BLACK : GRAY));
@@ -2395,14 +2616,14 @@ void DrawNode(FNode node)
                      MeasureText(node->output.data[i].valueText, 20))/2, node->output.data[i].shape.y + 
                      node->output.data[i].shape.height/2 - 9, 20, DARKGRAY);
         }
-        
+
         if (node->inputsCount > 0) DrawRectangleRec(node->inputShape, ((CheckCollisionPointRec(mousePosition, CameraToViewRec(node->inputShape, camera)) ? LIGHTGRAY : GRAY)));
         else DrawRectangleRec(node->inputShape, ((CheckCollisionPointRec(mousePosition, CameraToViewRec(node->inputShape, camera)) ? LIGHTGRAY : RED)));
         DrawRectangleLines(node->inputShape.x, node->inputShape.y, node->inputShape.width, node->inputShape.height, BLACK);
-        
+
         DrawRectangleRec(node->outputShape, ((CheckCollisionPointRec(mousePosition, CameraToViewRec(node->outputShape, camera)) ? LIGHTGRAY : GRAY)));
         DrawRectangleLines(node->outputShape.x, node->outputShape.y, node->outputShape.width, node->outputShape.height, BLACK);
-        
+
         if (debugMode)
         {
             const char *string =
@@ -2430,47 +2651,39 @@ void DrawNodeLine(FLine line)
     {
         Vector2 from = { 0, 0 };
         Vector2 to = { 0, 0 };
-        
+
         int indexTo = -1;        
         if (line->to != -1)
         {
             indexTo = GetNodeIndex(line->to);
             
-            if (indexTo != -1)
-            {
-                to.x = nodes[indexTo]->inputShape.x + nodes[indexTo]->inputShape.width/2;
-                to.y = nodes[indexTo]->inputShape.y + nodes[indexTo]->inputShape.height/2;
-            }
-            else TraceLogFNode(true, "error when trying to find node id %i due to index is out of bounds %i", line->to, indexTo);
+            to.x = nodes[indexTo]->inputShape.x + nodes[indexTo]->inputShape.width/2;
+            to.y = nodes[indexTo]->inputShape.y + nodes[indexTo]->inputShape.height/2;
         }
         else to = CameraToViewVector2(mousePosition, camera);
-        
+
         int indexFrom = GetNodeIndex(line->from);
-        
-        if (indexFrom != -1)
-        {
-            from.x = nodes[indexFrom]->outputShape.x + nodes[indexFrom]->outputShape.width/2;
-            from.y = nodes[indexFrom]->outputShape.y + nodes[indexFrom]->outputShape.height/2;
-        }
-        else TraceLogFNode(true, "error when trying to find node id %i due to index is out of bounds %i", line->from, indexFrom);
-        
+
+        from.x = nodes[indexFrom]->outputShape.x + nodes[indexFrom]->outputShape.width/2;
+        from.y = nodes[indexFrom]->outputShape.y + nodes[indexFrom]->outputShape.height/2;
+
         DrawCircle(from.x, from.y, 5, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
         DrawCircle(to.x, to.y, 5, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
-        
+
         if (from.x <= to.x)
         {
-            int current = 0;        
+            int current = 0;
             while (current < NODE_LINE_DIVISIONS) 
             {
                 Vector2 fromCurve = { 0, 0 };
                 fromCurve.x = FEaseLinear(current, from.x, to.x - from.x, NODE_LINE_DIVISIONS);
                 fromCurve.y = FEaseInOutQuad(current, from.y, to.y - from.y, NODE_LINE_DIVISIONS);
                 current++;
-                
+
                 Vector2 toCurve = { 0, 0 };
                 toCurve.x = FEaseLinear(current, from.x, to.x - from.x, NODE_LINE_DIVISIONS);
                 toCurve.y = FEaseInOutQuad(current, from.y, to.y - from.y, NODE_LINE_DIVISIONS);
-                
+
                 DrawLine(fromCurve.x, fromCurve.y, toCurve.x, toCurve.y, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
             }
         }
@@ -2482,29 +2695,22 @@ void DrawNodeLine(FLine line)
             float multiplier = (((to.y - from.y) > 0) ? 1 : -1);
             float radius = (fabs(to.y - from.y)/4 + 0.02f)*multiplier;
             float distance = FClamp(fabs(to.x - from.x)/100, 0.0f, 1.0f);
-            
+
             DrawLine(from.x, from.y, from.x, from.y, BLACK);
-            
             while (angle < 90)
             {
                 DrawLine(from.x + FCos(angle*DEG2RAD)*radius*multiplier*distance, from.y + radius + FSin(angle*DEG2RAD)*radius, from.x + FCos((angle + 10)*DEG2RAD)*radius*multiplier*distance, from.y + radius + FSin((angle + 10)*DEG2RAD)*radius, BLACK);
                 angle += 10;
             }
-            
             Vector2 lastPosition = { from.x, from.y + radius*2 };
-            
             DrawLine(lastPosition.x, lastPosition.y, to.x + FCos(270*DEG2RAD)*radius*multiplier, to.y - radius + FSin(270*DEG2RAD)*radius, BLACK);
-            
             lastPosition.x = to.x;
-            
             while (angle < 270)
             {
                 DrawLine(to.x + FCos(angle*DEG2RAD)*radius*multiplier*distance, to.y - radius + FSin(angle*DEG2RAD)*radius, to.x + FCos((angle + 10)*DEG2RAD)*radius*multiplier*distance, to.y - radius + FSin((angle + 10)*DEG2RAD)*radius, BLACK);
                 angle += 10;
             }
-            
             lastPosition.y = lastPosition.y + radius*2;
-            
             DrawLine(to.x, to.y, to.x, to.y, BLACK);
         }
         
@@ -2552,14 +2758,13 @@ void DrawNodeLine(FLine line)
                 default: break;
             }
         }
-        
+
         if (debugMode)
         {
             const char *string =
             "id: %i\n"
             "from: %i\n"
             "to: %i\n";
-            
             DrawText(FormatText(string, line->id, line->from, line->to), screenSize.x*0.85f - 10 - 50, 10 + 75*line->id, 10, BLACK);
         }
     }
@@ -2573,7 +2778,7 @@ void DrawComment(FComment comment)
     {
         if ((commentState == 0) || ((commentState == 1) && (tempComment->id != comment->id)) || ((commentState == 1) && editSize != -1)) DrawRectangleRec(comment->shape, Fade(YELLOW, 0.2f));
         DrawRectangleLines(comment->shape.x, comment->shape.y, comment->shape.width, comment->shape.height, BLACK);
-        
+
         if ((commentState == 0) || ((commentState == 1) && (tempComment->id != comment->id)) || ((commentState == 1) && editSize != -1))
         {
             DrawRectangleRec(comment->sizeTShape, ((CheckCollisionPointRec(mousePosition, CameraToViewRec(comment->sizeTShape, camera))) ? LIGHTGRAY : GRAY));
@@ -2593,12 +2798,12 @@ void DrawComment(FComment comment)
             DrawRectangleRec(comment->sizeBrShape, ((CheckCollisionPointRec(mousePosition, CameraToViewRec(comment->sizeBrShape, camera))) ? LIGHTGRAY : GRAY));
             DrawRectangleLines(comment->sizeBrShape.x, comment->sizeBrShape.y, comment->sizeBrShape.width, comment->sizeBrShape.height, BLACK);
         }
-        
+
         if (comment->id == editComment)
         {
             int letter = -1;
             letter = GetKeyPressed();
-          
+
             if (letter != -1)
             {
                 if (letter == KEY_BACKSPACE)
@@ -2611,7 +2816,7 @@ void DrawComment(FComment comment)
                             break;
                         }
                     }
-                    
+
                     comment->value[MAX_COMMENT_LENGTH - 1] = '\0';
                 }
                 else if (letter == KEY_ENTER) editComment = -1;
@@ -2633,7 +2838,7 @@ void DrawComment(FComment comment)
         }
 
         DrawRectangleLines(comment->valueShape.x, comment->valueShape.y, comment->valueShape.width, comment->valueShape.height, ((editComment == comment->id) ? BLACK : LIGHTGRAY));
-        
+
         int initPos = comment->shape.x + 14;
         for (int i = 0; i < MAX_COMMENT_LENGTH; i++)
         {
@@ -2642,7 +2847,7 @@ void DrawComment(FComment comment)
             DrawText(FormatText("%c", comment->value[i]), initPos, comment->valueShape.y + 2, 20, DARKGRAY);
             initPos += MeasureText(FormatText("%c", comment->value[i]), 20) + 1;
         }
-        
+
         if (debugMode)
         {
             const char *string =
@@ -2663,8 +2868,8 @@ bool FButton(Rectangle bounds, const char *text)
 
     if (bounds.width < (MeasureText(text, 10) + 20)) bounds.width = MeasureText(text, 10) + 20;
     if (bounds.height < 10) bounds.height = 10 + 40;
-    
-    if (CheckCollisionPointRec(mousePosition, bounds))
+
+    if (CheckCollisionPointRec(mousePosition, bounds) && (scrollState == 0))
     {
         if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) buttonState = BUTTON_PRESSED;
         else if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) buttonState = BUTTON_CLICKED;
@@ -2694,9 +2899,9 @@ bool FButton(Rectangle bounds, const char *text)
         } break;
         default: break;
     }
-    
+
     menuOffset++;
-    
+
     return (buttonState == BUTTON_CLICKED);
 }
 
@@ -2707,37 +2912,33 @@ void DestroyNode(FNode node)
     {
         int id = node->id;
         int index = GetNodeIndex(id);
-        
-        if (index != -1)
+
+        for (int i = linesCount - 1; i >= 0; i--)
         {
-            for (int i = linesCount - 1; i >= 0; i--)
-            {
-                if (lines[i]->from == node->id || lines[i]->to == node->id) DestroyNodeLine(lines[i]);
-            }
-            
-            for (int i = 0; i < MAX_VALUES; i++)
-            {
-               FNODE_FREE(nodes[index]->output.data[i].valueText);
-               usedMemory -= MAX_NODE_LENGTH;
-               nodes[index]->output.data[i].valueText = NULL;
-            }
-
-            FNODE_FREE(nodes[index]);
-            usedMemory -= sizeof(FNodeData);
-            nodes[index] = NULL;
-            
-            for (int i = index; i < nodesCount; i++)
-            {
-                if ((i + 1) < nodesCount) nodes[i] = nodes[i + 1];
-            }
-
-            nodesCount--;
-
-            TraceLogFNode(false, "destroyed node id %i (index: %i) [USED RAM: %i bytes]", id, index, usedMemory);
-            
-            CalculateValues();
+            if (lines[i]->from == node->id || lines[i]->to == node->id) DestroyNodeLine(lines[i]);
         }
-        else TraceLogFNode(true, "error when trying to destroy node id %i (index: %i)", id, index);
+
+        for (int i = 0; i < MAX_VALUES; i++)
+        {
+           FNODE_FREE(nodes[index]->output.data[i].valueText);
+           usedMemory -= MAX_NODE_LENGTH;
+           nodes[index]->output.data[i].valueText = NULL;
+        }
+
+        FNODE_FREE(nodes[index]);
+        usedMemory -= sizeof(FNodeData);
+        nodes[index] = NULL;
+
+        for (int i = index; i < nodesCount; i++)
+        {
+            if ((i + 1) < nodesCount) nodes[i] = nodes[i + 1];
+        }
+
+        nodesCount--;
+
+        TraceLogFNode(false, "destroyed node id %i (index: %i) [USED RAM: %i bytes]", id, index, usedMemory);
+        
+        CalculateValues();
     }
     else TraceLogFNode(true, "error trying to destroy a null referenced node");
 }
@@ -2749,7 +2950,7 @@ void DestroyNodeLine(FLine line)
     {
         int id = line->id;
         int index = -1;
-        
+
         for (int i = 0; i < linesCount; i++)
         {
             if (lines[i]->id == id)
@@ -2758,7 +2959,7 @@ void DestroyNodeLine(FLine line)
                 break;
             }
         }
-        
+
         if (index != -1)
         {        
             FNODE_FREE(lines[index]);
@@ -2771,9 +2972,9 @@ void DestroyNodeLine(FLine line)
             }
 
             linesCount--;
-            
+
             TraceLogFNode(false, "destroyed line id %i (index: %i) [USED RAM: %i bytes]", id, index, usedMemory);
-            
+
             CalculateValues();
         }
         else TraceLogFNode(true, "error when trying to destroy line id %i due to index is out of bounds %i", id, index);
@@ -2788,7 +2989,7 @@ void DestroyComment(FComment comment)
     {
         int id = comment->id;
         int index = -1;
-        
+
         for (int i = 0; i < commentsCount; i++)
         {
             if (comments[i]->id == id)
@@ -2797,7 +2998,7 @@ void DestroyComment(FComment comment)
                 break;
             }
         }
-        
+
         if (index != -1)
         {
             FNODE_FREE(comments[index]->value);
@@ -2838,7 +3039,7 @@ void CloseFNode()
                     nodes[i]->output.data[k].valueText = NULL;
                 }
             }
-            
+
             FNODE_FREE(nodes[i]);
             usedMemory -= sizeof(FNodeData);
             nodes[i] = NULL;
@@ -2854,7 +3055,7 @@ void CloseFNode()
             lines[i] = NULL;
         }
     }
-    
+
     for (int i = 0; i < commentsCount; i++)
     {
         if ((comments[i] != NULL) && (comments[i]->value != NULL))
@@ -2868,20 +3069,20 @@ void CloseFNode()
             comments[i] = NULL;
         }
     }
-    
+
     if (editNodeText != NULL)
     {
         FNODE_FREE(editNodeText);
         usedMemory -= MAX_NODE_LENGTH;
         editNodeText = NULL;
     }
-    
+
     nodesCount = 0;
     linesCount = 0;
     commentsCount = 0;
     selectedCommentNodesCount = 0;
     for (int i = 0; i < MAX_NODES; i++) selectedCommentNodes[i] = -1;
-    
+
     TraceLogFNode(false, "unitialization complete [USED RAM: %i bytes]", usedMemory);
 }
 
@@ -2889,7 +3090,7 @@ void CloseFNode()
 void TraceLogFNode(bool error, const char *text, ...)
 {
     va_list args;
-    
+
     fprintf(stdout, "FNode: ");
     va_start(args, text);
     vfprintf(stdout, text, args);
@@ -2943,12 +3144,12 @@ Vector4 FVector4Normalize(Vector4 v)
 Vector2 FVector2Projection(Vector2 a, Vector2 b)
 {
     Vector2 output = { 0, 0 };
-    
+
     float dotAB = FVector2Dot(a, b);
     float dotBB = FVector2Dot(b, b);
     output.x = dotAB/dotBB*b.x;
     output.y = dotAB/dotBB*b.y;
-    
+
     return output;
 }
 
@@ -2956,13 +3157,13 @@ Vector2 FVector2Projection(Vector2 a, Vector2 b)
 Vector3 FVector3Projection(Vector3 a, Vector3 b)
 {
     Vector3 output = { 0, 0, 0 };
-    
+
     float dotAB = FVector3Dot(a, b);
     float dotBB = FVector3Dot(b, b);
     output.x = dotAB/dotBB*b.x;
     output.y = dotAB/dotBB*b.y;
     output.z = dotAB/dotBB*b.z;
-    
+
     return output;
 }
 
@@ -2970,14 +3171,14 @@ Vector3 FVector3Projection(Vector3 a, Vector3 b)
 Vector4 FVector4Projection(Vector4 a, Vector4 b)
 {
     Vector4 output = { 0, 0, 0, 0 };
-    
+
     float dotAB = FVector4Dot(a, b);
     float dotBB = FVector4Dot(b, b);
     output.x = dotAB/dotBB*b.x;
     output.y = dotAB/dotBB*b.y;
     output.z = dotAB/dotBB*b.z;
     output.w = dotAB/dotBB*b.w;
-    
+
     return output;
 }
 
@@ -2985,11 +3186,11 @@ Vector4 FVector4Projection(Vector4 a, Vector4 b)
 Vector2 FVector2Rejection(Vector2 a, Vector2 b)
 {
     Vector2 output = { 0, 0 };
-    
+
     Vector2 projection = FVector2Projection(a, b);
     output.x = a.x - projection.x;
     output.y = a.y - projection.y;
-    
+
     return output;
 }
 
@@ -2997,12 +3198,12 @@ Vector2 FVector2Rejection(Vector2 a, Vector2 b)
 Vector3 FVector3Rejection(Vector3 a, Vector3 b)
 {
     Vector3 output = { 0, 0, 0 };
-    
+
     Vector3 projection = FVector3Projection(a, b);
     output.x = a.x - projection.x;
     output.y = a.y - projection.y;
     output.z = a.z - projection.z;
-    
+
     return output;
 }
 
@@ -3010,13 +3211,13 @@ Vector3 FVector3Rejection(Vector3 a, Vector3 b)
 Vector4 FVector4Rejection(Vector4 a, Vector4 b)
 {
     Vector4 output = { 0, 0, 0, 0 };
-    
+
     Vector4 projection = FVector4Projection(a, b);
     output.x = a.x - projection.x;
     output.y = a.y - projection.y;
     output.z = a.z - projection.z;
     output.w = a.w - projection.w;
-    
+
     return output;
 }
 
@@ -3051,7 +3252,7 @@ Matrix FMatrixIdentity()
                       0.0f, 1.0f, 0.0f, 0.0f, 
                       0.0f, 0.0f, 1.0f, 0.0f,
                       0.0f, 0.0f, 0.0f, 1.0f };
-    
+
     return result;
 }
 
@@ -3139,10 +3340,10 @@ float FSquareRoot(float value)
 float FPosterize(float value, float samples)
 {
     float output = value*samples;
-    
+
     output = (float)floor(output);
     output /= samples;
-    
+
     return output;
 }
 
@@ -3150,10 +3351,10 @@ float FPosterize(float value, float samples)
 float FClamp(float value, float min, float max)
 {
     float output = value;
-    
+
     if (output < min) output = min;
     else if (output > max) output = max;
-    
+
     return output;
 }
 
@@ -3161,10 +3362,10 @@ float FClamp(float value, float min, float max)
 float FTrunc(float value)
 {
     float output = value;
-    
+
     int truncated = (int)output;
     output = (float)truncated;
-    
+
     return output;
 }
 
@@ -3172,13 +3373,13 @@ float FTrunc(float value)
 float FRound(float value)
 {
     float output = fabs(value);
-    
+
     int truncated = (int)output;
     float decimals = output - (float)truncated;
-    
+
     output = ((decimals > 0.5f) ? (output - decimals + 1.0f) : (output - decimals));
     if (value < 0.0f) output *= -1;
-    
+
     return output;
 }
 
@@ -3203,10 +3404,10 @@ float FLerp(float valueA, float valueB, float time)
 float FSmoothStep(float min, float max, float value)
 {
     float output = 0.0f;
-    
+
     if (min <= max) output = FClamp((value/(max - min) - min), 0.0f, 1.0f);
     else output = FClamp((value/(min - max) - max), 0.0f, 1.0f);
-    
+
     return output;
 }
 
@@ -3220,7 +3421,7 @@ float FEaseLinear(float t, float b, float c, float d)
 float FEaseInOutQuad(float t, float b, float c, float d)
 {
     float output = 0.0f;
-    
+
 	t /= d/2;
 	if (t < 1) output = (float)(c/2*t*t + b);
     else
@@ -3228,7 +3429,7 @@ float FEaseInOutQuad(float t, float b, float c, float d)
         t--;
         output = (float)(-c/2*(t*(t-2) - 1) + b);
     }
-    
+
 	return output;
 }
 
@@ -3242,4 +3443,28 @@ void FStringToFloat(float *pointer, const char *string)
 void FFloatToString(char *buffer, float value)
 {
     sprintf(buffer, "%.3f", value);
+}
+
+// Returns true if a specific string is found in a text file
+bool FSearch(char *filename, char *string)
+{
+	FILE *file;
+	bool found = false;
+	char temp[512];
+
+	if ((file = fopen(filename, "r")) == NULL) TraceLogFNode(true, "error when trying to open a file to search in");
+
+	while(fgets(temp, 512, file) != NULL) 
+    {
+		if ((strstr(temp, string)) != NULL)
+        {
+            found = true;
+            break;
+        }
+	}
+
+    // Close file if needed
+	if (file) fclose(file);
+
+   	return found;
 }
