@@ -254,43 +254,46 @@ void TraceLogFNode(bool error, const char *text, ...);                      // O
 //------------------------------------------------------------------------------------
 // Math Functions 
 //------------------------------------------------------------------------------------
-float FVector2Length(Vector2 v);                                // Returns length of a Vector2
-float FVector3Length(Vector3 v);                                // Returns length of a Vector3
-float FVector4Length(Vector4 v);                                // Returns length of a Vector4
-Vector2 FVector2Normalize(Vector2 v);                           // Returns a normalized Vector2
-Vector3 FVector3Normalize(Vector3 v);                           // Returns a normalized Vector3
-Vector4 FVector4Normalize(Vector4 v);                           // Returns a normalized Vector4
-float FVector2Dot(Vector2 a, Vector2 b);                        // Returns the dot product of two Vector2
-float FVector3Dot(Vector3 a, Vector3 b);                        // Returns the dot product of two Vector3
-float FVector4Dot(Vector4 a, Vector4 b);                        // Returns the dot product of two Vector4
-Vector2 FVector2Projection(Vector2 a, Vector2 b);               // Returns the projection vector of two Vector2
-Vector3 FVector3Projection(Vector3 a, Vector3 b);               // Returns the projection vector of two Vector3
-Vector4 FVector4Projection(Vector4 a, Vector4 b);               // Returns the projection vector of two Vector4
-Vector2 FVector2Rejection(Vector2 a, Vector2 b);                // Returns the rejection vector of two Vector2
-Vector3 FVector3Rejection(Vector3 a, Vector3 b);                // Returns the rejection vector of two Vector3
-Vector4 FVector4Rejection(Vector4 a, Vector4 b);                // Returns the rejection vector of two Vector4
-Vector3 FCrossProduct(Vector3 a, Vector3 b);                    // Returns the cross product of two vectors
-Matrix FMatrixIdentity();                                       // Returns identity matrix
-Matrix FMatrixMultiply(Matrix left, Matrix right);              // Returns the result of multiply two matrices
-Matrix FMatrixTranslate(float x, float y, float z);             // Returns translation matrix
-Matrix FMatrixRotate(Vector3 axis, float angle);                // Create rotation matrix from axis and angle provided in radians
-Matrix FMatrixScale(float x, float y, float z);                 // Returns scaling matrix
-void FMatrixTranspose(Matrix *mat);                             // Transposes provided matrix
-void FMultiplyMatrixVector(Vector4 *v, Matrix mat);             // Transform a quaternion given a transformation matrix
-float FCos(float value);                                        // Returns the cosine value of a radian angle
-float FSin(float value);                                        // Returns the sine value of a radian angle
-float FTan(float value);                                        // Returns the tangent value of a radian angle
-float FPower(float value, float exp);                           // Returns a value to the power of an exponent
-float FSquareRoot(float value);                                 // Returns the square root of the input value
-float FPosterize(float value, float samples);                   // Returns a value rounded based on the samples
-float FClamp(float value, float min, float max);                // Returns a value clamped by a min and max values
-float FTrunc(float value);                                      // Returns a truncated value of a value
-float FRound(float value);                                      // Returns a rounded value of a value
-float FCeil(float value);                                       // Returns a rounded up to the nearest integer of a value
-float FLerp(float valueA, float valueB, float time);            // Returns the interpolation between two values
-float FSmoothStep(float min, float max, float value);           // Returns the interpolate of a value in a range
-float FEaseLinear(float t, float b, float c, float d);          // Returns an ease linear value between two parameters 
-float FEaseInOutQuad(float t, float b, float c, float d);       // Returns an ease quadratic in-out value between two parameters
+float FVector2Length(Vector2 v);                                    // Returns length of a Vector2
+float FVector3Length(Vector3 v);                                    // Returns length of a Vector3
+float FVector4Length(Vector4 v);                                    // Returns length of a Vector4
+Vector2 FVector2Normalize(Vector2 v);                               // Returns a normalized Vector2
+Vector3 FVector3Normalize(Vector3 v);                               // Returns a normalized Vector3
+Vector4 FVector4Normalize(Vector4 v);                               // Returns a normalized Vector4
+float FVector2Dot(Vector2 a, Vector2 b);                            // Returns the dot product of two Vector2
+float FVector3Dot(Vector3 a, Vector3 b);                            // Returns the dot product of two Vector3
+float FVector4Dot(Vector4 a, Vector4 b);                            // Returns the dot product of two Vector4
+Vector2 FVector2Projection(Vector2 a, Vector2 b);                   // Returns the projection vector of two Vector2
+Vector3 FVector3Projection(Vector3 a, Vector3 b);                   // Returns the projection vector of two Vector3
+Vector4 FVector4Projection(Vector4 a, Vector4 b);                   // Returns the projection vector of two Vector4
+Vector2 FVector2Rejection(Vector2 a, Vector2 b);                    // Returns the rejection vector of two Vector2
+Vector3 FVector3Rejection(Vector3 a, Vector3 b);                    // Returns the rejection vector of two Vector3
+Vector4 FVector4Rejection(Vector4 a, Vector4 b);                    // Returns the rejection vector of two Vector4
+Vector3 FCrossProduct(Vector3 a, Vector3 b);                        // Returns the cross product of two vectors
+Matrix FMatrixIdentity();                                           // Returns identity matrix
+Matrix FMatrixMultiply(Matrix left, Matrix right);                  // Returns the result of multiply two matrices
+Matrix FMatrixTranslate(float x, float y, float z);                 // Returns translation matrix
+Matrix FMatrixRotate(Vector3 axis, float angle);                    // Create rotation matrix from axis and angle provided in radians
+Matrix FMatrixScale(float x, float y, float z);                     // Returns scaling matrix
+void FMatrixTranspose(Matrix *mat);                                 // Transposes provided matrix
+void FMultiplyMatrixVector(Vector4 *v, Matrix mat);                 // Transform a quaternion given a transformation matrix
+float FCos(float value);                                            // Returns the cosine value of a radian angle
+float FSin(float value);                                            // Returns the sine value of a radian angle
+float FTan(float value);                                            // Returns the tangent value of a radian angle
+float FPower(float value, float exp);                               // Returns a value to the power of an exponent
+float FSquareRoot(float value);                                     // Returns the square root of the input value
+float FPosterize(float value, float samples);                       // Returns a value rounded based on the samples
+float FClamp(float value, float min, float max);                    // Returns a value clamped by a min and max values
+float FTrunc(float value);                                          // Returns a truncated value of a value
+float FRound(float value);                                          // Returns a rounded value of a value
+float FCeil(float value);                                           // Returns a rounded up to the nearest integer of a value
+float FLerp(float valueA, float valueB, float time);                // Returns the interpolation between two values
+Vector2 FVector2Lerp(Vector2 valueA, Vector2 valueB, float time);   // Returns the interpolation between two Vector2 values
+Vector3 FVector3Lerp(Vector3 valueA, Vector3 valueB, float time);   // Returns the interpolation between two Vector3 values
+Vector4 FVector4Lerp(Vector4 valueA, Vector4 valueB, float time);   // Returns the interpolation between two Vector4 values
+float FSmoothStep(float min, float max, float value);               // Returns the interpolate of a value in a range
+float FEaseLinear(float t, float b, float c, float d);              // Returns an ease linear value between two parameters 
+float FEaseInOutQuad(float t, float b, float c, float d);           // Returns an ease quadratic in-out value between two parameters
 
 //------------------------------------------------------------------------------------
 // String Functions
@@ -492,7 +495,7 @@ FNode CreateNodeUniform(FNodeType type, const char *name, int dataCount)
 // Creates a property node with type name and data count as parameters
 FNode CreateNodeProperty(FNodeType type, const char *name, int dataCount, int inputs)
 {
-    FNode newNode = InitializeNode(false); // (((type == FNODE_SAMPLER2D) ? true : false));
+    FNode newNode = InitializeNode((inputs > 0));
 
     newNode->type = type;
     newNode->name = name;
@@ -1001,7 +1004,7 @@ void CalculateValues()
                     nodes[i]->output.dataCount = 0;
                 }
             }
-            else if ((nodes[i]->type > FNODE_APPEND) && (nodes[i]->type != FNODE_SAMPLER2D))
+            else if (nodes[i]->type > FNODE_APPEND)
             {
                 if (nodes[i]->inputsCount > 0)
                 {
@@ -1094,6 +1097,24 @@ void CalculateValues()
                         {
                             for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FRound(nodes[i]->output.data[j].value);
                         } break;
+                        case FNODE_VERTEXCOLOR:
+                        {
+                            if (nodes[i]->inputsCount == 1)
+                            {
+                                int index = GetNodeIndex(nodes[i]->inputs[0]);
+                                switch ((int)nodes[index]->output.data[0].value)
+                                {
+                                    case 0: nodes[i]->output.dataCount = 4; break;
+                                    case 1: nodes[i]->output.dataCount = 3; break;
+                                    default: nodes[i]->output.dataCount = 1; break;
+                                }
+                            }
+                            else
+                            {
+                                nodes[i]->output.dataCount = 0;
+                                for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+                            }
+                        }
                         case FNODE_CEIL:
                         {
                             for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FCeil(nodes[i]->output.data[j].value);
@@ -1177,8 +1198,48 @@ void CalculateValues()
                                 int indexA = GetNodeIndex(nodes[i]->inputs[0]);
                                 int indexB = GetNodeIndex(nodes[i]->inputs[1]);
                                 int indexC = GetNodeIndex(nodes[i]->inputs[2]);
-
-                                for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FLerp(nodes[indexA]->output.data[j].value, nodes[indexB]->output.data[j].value, nodes[indexC]->output.data[j].value);
+                                
+                                switch (nodes[i]->output.dataCount)
+                                {
+                                    case 1:
+                                    {
+                                        for (int j = 0; j < nodes[i]->output.dataCount; j++) nodes[i]->output.data[j].value = FLerp(nodes[indexA]->output.data[j].value, nodes[indexB]->output.data[j].value, nodes[indexC]->output.data[j].value);
+                                    } break;
+                                    case 2:
+                                    {
+                                        Vector2 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value };
+                                        Vector2 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value };
+                                        Vector2 lerp = FVector2Lerp(vectorA, vectorB, nodes[indexC]->output.data[0].value);
+                                        
+                                        nodes[i]->output.dataCount = 2;
+                                        nodes[i]->output.data[0].value = lerp.x;
+                                        nodes[i]->output.data[1].value = lerp.y;
+                                    } break;
+                                    case 3:
+                                    {
+                                        Vector3 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value, nodes[indexA]->output.data[2].value };
+                                        Vector3 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value, nodes[indexA]->output.data[2].value };
+                                        Vector3 lerp = FVector3Lerp(vectorA, vectorB, nodes[indexC]->output.data[0].value);
+                                        
+                                        nodes[i]->output.dataCount = 3;
+                                        nodes[i]->output.data[0].value = lerp.x;
+                                        nodes[i]->output.data[1].value = lerp.y;
+                                        nodes[i]->output.data[2].value = lerp.z;
+                                    } break;
+                                    case 4:
+                                    {
+                                        Vector4 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value, nodes[indexA]->output.data[2].value, nodes[indexA]->output.data[3].value };
+                                        Vector4 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value, nodes[indexA]->output.data[2].value, nodes[indexA]->output.data[3].value };
+                                        Vector4 lerp = FVector4Lerp(vectorA, vectorB, nodes[indexC]->output.data[0].value);
+                                        
+                                        nodes[i]->output.dataCount = 4;
+                                        nodes[i]->output.data[0].value = lerp.x;
+                                        nodes[i]->output.data[1].value = lerp.y;
+                                        nodes[i]->output.data[2].value = lerp.z;
+                                        nodes[i]->output.data[3].value = lerp.w;
+                                    } break;
+                                    default: break;
+                                }
                             }
                             else
                             {
@@ -1541,6 +1602,24 @@ void CalculateValues()
                                 nodes[i]->output.dataCount = 0;
                             }
                         }
+                        case FNODE_SAMPLER2D:
+                        {
+                            if (nodes[i]->inputsCount == 2)
+                            {
+                                int indexA = GetNodeIndex(nodes[i]->inputs[1]);
+                                switch ((int)nodes[indexA]->output.data[0].value)
+                                {
+                                    case 0: nodes[i]->output.dataCount = 4; break;
+                                    case 1: nodes[i]->output.dataCount = 3; break;
+                                    default: nodes[i]->output.dataCount = 1; break;
+                                }
+                            }
+                            else
+                            {
+                                for (int j = 0; j < MAX_VALUES; j++) nodes[i]->output.data[j].value = 0.0f;
+                                nodes[i]->output.dataCount = 0;
+                            }
+                        } break;
                         default: break;
                     }
                 }
@@ -1570,7 +1649,7 @@ void DrawNode(FNode node)
         if (node->property) DrawRectangleRec(node->shape, ((node->id == selectedNode) ? (Color){ 128, 204, 139, 255 } : (Color){ 173, 225, 181, 255 }));
         else DrawRectangleRec(node->shape, ((node->id == selectedNode) ? GRAY : LIGHTGRAY));
         DrawRectangleLines(node->shape.x, node->shape.y, node->shape.width, node->shape.height, BLACK);
-        DrawText(node->name, node->shape.x + node->shape.width/2 - MeasureText(node->name, 10)/2, node->shape.y - 15, 10, BLACK);
+        DrawText(FormatText("%s [ID: %i]", node->name, node->id), node->shape.x + node->shape.width/2 - MeasureText(node->name, 10)/2, node->shape.y - 15, 10, BLACK);
 
         if ((node->type >= FNODE_MATRIX) && (node->type <= FNODE_VECTOR4))
         {
@@ -1668,17 +1747,12 @@ void DrawNode(FNode node)
         {
             const char *string =
             "id: %i\n"
-            "type: %i\n"
             "name: %s\n"
-            "inputs(%i): %i, %i, %i, %i\n"
-            "output(%i): %.02f, %.02f, %.02f, %.02f\n"
-            "outputText: %s, %s, %s, %s\n"
-            "shape: %i %i, %i, %i";
+            "inputs(%i/%i): %i, %i, %i, %i\n"
+            "output(%i): %.02f, %.02f, %.02f, %.02f";
 
-            DrawText(FormatText(string, node->id, node->type, node->name, node->inputsCount, node->inputs[0], node->inputs[1], node->inputs[2], 
-            node->inputs[3], node->output.dataCount, node->output.data[0].value, node->output.data[1].value, node->output.data[2].value, node->output.data[3].value, 
-            node->output.data[0].valueText, node->output.data[1].valueText, node->output.data[2].valueText, node->output.data[3].valueText, node->shape.x, node->shape.y, 
-            node->shape.width, node->shape.height), node->shape.x, node->shape.y + node->shape.height + 5, 10, BLACK);
+            DrawText(FormatText(string, node->id, node->name, node->inputsCount, node->inputsLimit, node->inputs[0], node->inputs[1], node->inputs[2], 
+            node->inputs[3], node->output.dataCount, node->output.data[0].value, node->output.data[1].value, node->output.data[2].value, node->output.data[3].value), node->shape.x, node->shape.y + node->shape.height + 5, 10, BLACK);
         }
     }
     else TraceLogFNode(true, "error trying to draw a null referenced node");
@@ -1796,17 +1870,13 @@ void DrawNodeLine(FLine line)
                     if ((nodes[indexTo]->inputsCount > 0) && (nodes[indexTo]->inputs[0] == nodes[indexFrom]->id)) DrawText("Left", from.x + 5, from.y - 30, 10, BLACK);
                     else if ((nodes[indexTo]->inputsCount > 1) && (nodes[indexTo]->inputs[1] == nodes[indexFrom]->id)) DrawText("Right", from.x + 5, from.y - 30, 10, BLACK);
                 } break;
+                case FNODE_SAMPLER2D:
+                {
+                    if ((nodes[indexTo]->inputsCount > 0) && (nodes[indexTo]->inputs[0] == nodes[indexFrom]->id)) DrawText("Unit", from.x + 5, from.y - 30, 10, BLACK);
+                    else if ((nodes[indexTo]->inputsCount > 1) && (nodes[indexTo]->inputs[1] == nodes[indexFrom]->id)) DrawText("Type", from.x + 5, from.y - 30, 10, BLACK);
+                } break;
                 default: break;
             }
-        }
-
-        if (debugMode)
-        {
-            const char *string =
-            "id: %i\n"
-            "from: %i\n"
-            "to: %i\n";
-            DrawText(FormatText(string, line->id, line->from, line->to), screenSize.x*0.85f - 10 - 50, 10 + 75*line->id, 10, BLACK);
         }
     }
     else TraceLogFNode(true, "error trying to draw a null referenced line");
@@ -1887,16 +1957,6 @@ void DrawComment(FComment comment)
             
             DrawText(FormatText("%c", comment->value[i]), initPos, comment->valueShape.y + 2, 20, DARKGRAY);
             initPos += MeasureText(FormatText("%c", comment->value[i]), 20) + 1;
-        }
-
-        if (debugMode)
-        {
-            const char *string =
-            "id: %i\n"
-            "value: %s\n"
-            "shape: %i, %i, %i, %i\n";
-            
-            DrawText(FormatText(string, comment->id, comment->value, comment->shape.x, comment->shape.y, comment->shape.width, comment->shape.height), comment->shape.x, comment->shape.y + comment->shape.height + 5, 10, BLACK);
         }
     }
     else TraceLogFNode(true, "error trying to draw a null referenced line");
@@ -2523,6 +2583,24 @@ float FCeil(float value)
 float FLerp(float valueA, float valueB, float time)
 {
     return (float)(valueA + (valueB - valueA)*time);
+}
+
+// Returns the interpolation between two Vector2 values
+Vector2 FVector2Lerp(Vector2 valueA, Vector2 valueB, float time)
+{
+    return (Vector2){ (float)(valueA.x + (valueB.x - valueA.x)*time), (float)(valueA.y + (valueB.y - valueA.y)*time) };
+}
+
+// Returns the interpolation between two Vector3 values
+Vector3 FVector3Lerp(Vector3 valueA, Vector3 valueB, float time)
+{
+    return (Vector3){ (float)(valueA.x + (valueB.x - valueA.x)*time), (float)(valueA.y + (valueB.y - valueA.y)*time), (float)(valueA.z + (valueB.z - valueA.z)*time) };
+}
+
+// Returns the interpolation between two Vector4 values
+Vector4 FVector4Lerp(Vector4 valueA, Vector4 valueB, float time)
+{
+    return (Vector4){ (float)(valueA.x + (valueB.x - valueA.x)*time), (float)(valueA.y + (valueB.y - valueA.y)*time), (float)(valueA.z + (valueB.z - valueA.z)*time), (float)(valueA.w + (valueB.w - valueA.w)*time) };
 }
 
 // Returns the interpolate of a value in a range

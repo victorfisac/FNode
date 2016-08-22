@@ -36,12 +36,13 @@
 #define     UI_BUTTON_HEIGHT            30                      // Interface bounds height
 #define     UI_SCROLL                   20                      // Interface scroll sensitivity
 #define     UI_GRID_ALPHA               0.25f                   // Interface canvas background grid lines alpha
-#define     VISOR_MODEL_SCALE           8.0f                    // Visor model scale
-#define     VISOR_MODEL_ROTATION        1.0f                    // Visor model rotation speed
+#define     VISOR_MODEL_SCALE           11.0f                   // Visor model scale
+#define     VISOR_MODEL_ROTATION        0.1f                    // Visor model rotation speed
 #define     VISOR_BORDER                2                       // Visor window border width
 #define     VERTEX_PATH                 "output/shader.vs"      // Vertex shader output path
 #define     FRAGMENT_PATH               "output/shader.fs"      // Fragment shader output path
 #define     DATA_PATH                   "output/shader.fnode"   // Shader data output path
+#define     MAX_TEXTURES                30                      // Shader maximum texture units
 
 //----------------------------------------------------------------------------------
 // Global Variables
@@ -65,17 +66,24 @@ int fxaaUniform = -1;                       // FXAA shader viewport size uniform
 Shader shader;                              // Visor model shader
 int viewUniform = -1;                       // Created shader view direction uniform location point
 int transformUniform = -1;                  // Created shader model transform uniform location point
-int timeUniformV = -1;                       // Created shader current time uniform location point in vertex shader
-int timeUniformF = -1;                       // Created shader current time uniform location point in fragment shader
+int timeUniformV = -1;                      // Created shader current time uniform location point in vertex shader
+int timeUniformF = -1;                      // Created shader current time uniform location point in fragment shader
 bool loadedShader = false;                  // Current loaded custom shader state
-int textureCount = 0;                       // Compiling shader current texture used count
 float currentTime = 0;                      // Current global time to send to shader as attribute
+char **droppedFiles;                        // Current dropped files paths
+Texture2D textures[MAX_TEXTURES] = { 0 };   // Shader texture unit textures
+int loadedFiles = 0;                        // Loaded textures count
+bool usedUnits[MAX_TEXTURES] = { false };   // Shader compiling used texture units
+bool fullVisor = false;                     // Visor full screen state
+bool help = false;                          // Display help message state
+bool visorState = false;                    // Visor camera control state
 
 //----------------------------------------------------------------------------------
 // Functions Declaration
 //----------------------------------------------------------------------------------
 void CheckPreviousShader();                                 // Check if there are a compatible shader in output folder
 void UpdateMouseData();                                     // Updates current mouse position and delta position
+void UpdateInputsData();                                    // Updates current inputs states
 void UpdateCanvas();                                        // Updates canvas space target and offset
 void UpdateScroll();                                        // Updates mouse scrolling for menu and canvas drag
 void UpdateNodesEdit();                                     // Check node data values edit input
@@ -95,6 +103,9 @@ void DrawCanvas();                                          // Draw canvas space
 void DrawCanvasGrid(int divisions);                         // Draw canvas grid with a specific number of divisions for horizontal and vertical lines
 void DrawVisor();                                           // Draws a visor with default model rotating and current shader
 void DrawInterface();                                       // Draw interface to create nodes
+char *GetFileExtension(char *filename);                     // Returns the extension of a file
+bool CheckFileExtension(char *filename, char *extension);   // Check filename for specific extension
+bool CheckTextureExtension(char *filename);                 // Check filename for compatible texture extensions
 
 //----------------------------------------------------------------------------------
 // Functions Definition
@@ -134,7 +145,7 @@ void CheckPreviousShader()
                 newNode->type = type;
                 newNode->property = property;
 
-                if ((type < FNODE_ADD)|| (type == FNODE_SAMPLER2D)) newNode->inputShape = (Rectangle){ 0, 0, 0, 0 };
+                if (type < FNODE_ADD) newNode->inputShape = (Rectangle){ 0, 0, 0, 0 };
 
                 switch ((int)type)
                 {
@@ -246,6 +257,23 @@ void UpdateMouseData()
     lastMousePosition = mousePosition;
     mousePosition = GetMousePosition();
     mouseDelta = (Vector2){ mousePosition.x - lastMousePosition.x, mousePosition.y - lastMousePosition.y };
+}
+
+// Updates current inputs states
+void UpdateInputsData()
+{
+    if (IsKeyPressed('P')) debugMode = !debugMode;
+    if (IsKeyPressed('H')) help = !help;
+    else if (IsKeyPressed(KEY_RIGHT_ALT))
+    {
+        fullVisor = !fullVisor;
+        UnloadRenderTexture(visorTarget);
+        visorTarget = LoadRenderTexture((fullVisor ? screenSize.x : (screenSize.x/4)), (fullVisor ? screenSize.y : (screenSize.y/4)));
+        
+        if (!fullVisor) camera3d = (Camera){{ 0.0f, 0.0f, 4.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, 45.0f };
+    }
+
+    if(fullVisor) UpdateCamera(&camera3d);
 }
 
 // Updates canvas space target and offset
@@ -497,7 +525,9 @@ void UpdateNodesLink()
                             int indexFrom = GetNodeIndex(tempLine->from);
 
                             bool valuesCheck = true;
-                            if (nodes[i]->type == FNODE_APPEND) valuesCheck = ((nodes[i]->output.dataCount + nodes[indexFrom]->output.dataCount <= 4) && (nodes[indexFrom]->output.dataCount == 1));
+                            if (nodes[i]->type == FNODE_SAMPLER2D) valuesCheck = (nodes[indexFrom]->output.dataCount == 1);
+                            else if (nodes[i]->type == FNODE_LERP) valuesCheck = (nodes[i]->inputsCount <= nodes[i]->inputsLimit);
+                            else if (nodes[i]->type == FNODE_APPEND) valuesCheck = ((nodes[i]->output.dataCount + nodes[indexFrom]->output.dataCount <= 4) && (nodes[indexFrom]->output.dataCount == 1));
                             else if (nodes[i]->type == FNODE_VERTEXCOLOR) valuesCheck = (nodes[indexFrom]->output.dataCount == 1);
                             else if ((nodes[i]->type == FNODE_POWER) && (nodes[i]->inputsCount == 1)) valuesCheck = (nodes[indexFrom]->output.dataCount == 1);
                             else if (nodes[i]->type == FNODE_STEP) valuesCheck = (nodes[indexFrom]->output.dataCount == 1);
@@ -538,7 +568,8 @@ void UpdateNodesLink()
 
                             if (((nodes[i]->inputsCount == 0) && (nodes[i]->type != FNODE_NORMALIZE) && (nodes[i]->type != FNODE_DOTPRODUCT) && 
                             (nodes[i]->type != FNODE_LENGTH) && (nodes[i]->type != FNODE_MULTIPLYMATRIX) && (nodes[i]->type != FNODE_TRANSPOSE) && (nodes[i]->type != FNODE_PROJECTION) &&
-                            (nodes[i]->type != FNODE_DISTANCE) && (nodes[i]->type != FNODE_REJECTION) && (nodes[i]->type != FNODE_HALFDIRECTION) && (nodes[i]->type != FNODE_STEP)) || valuesCheck)
+                            (nodes[i]->type != FNODE_DISTANCE) && (nodes[i]->type != FNODE_REJECTION) && (nodes[i]->type != FNODE_HALFDIRECTION) && (nodes[i]->type != FNODE_STEP) &&
+                            (nodes[i]->type != FNODE_LERP) && (nodes[i]->type != FNODE_SAMPLER2D)) || valuesCheck)
                             {
                                 // Check if there is already a line created with same linking ids
                                 for (int k = 0; k < linesCount; k++)
@@ -904,6 +935,35 @@ void UpdateCommentsEdit()
 void UpdateShaderData()
 {
     currentTime += GetFrameTime();
+    
+    if (IsFileDropped())
+    {
+        int filesCount = 0;
+        droppedFiles = GetDroppedFiles(&filesCount);
+        char *path = droppedFiles[0];
+        
+        if (CheckTextureExtension(path) && (loadedFiles < MAX_TEXTURES))
+        {
+            textures[loadedFiles] = LoadTexture(path);
+            
+            if (shader.id != 0)
+            {
+                switch (loadedFiles)
+                {
+                    case 0: model.material.texDiffuse = textures[loadedFiles]; break;
+                    case 1: model.material.texNormal = textures[loadedFiles]; break;
+                    case 2: model.material.texSpecular = textures[loadedFiles]; break;
+                    default: break;
+                }
+            }
+            
+            loadedFiles++;
+        }
+        else TraceLogFNode(false, "error when trying to import a non texture file or achieved maximum number of textures");
+        
+        
+        filesCount = 0;
+    }
 
     if (shader.id != 0)
     {
@@ -917,6 +977,9 @@ void UpdateShaderData()
         float time[1] = { currentTime };
         SetShaderValue(shader, timeUniformV, time, 1);
         SetShaderValue(shader, timeUniformF, time, 1);
+        
+        float resolution[2] = { (fullVisor ? screenSize.x : (screenSize.x/4)), (fullVisor ? screenSize.y : (screenSize.y/4)) };
+        SetShaderValue(fxaa, fxaaUniform, resolution, 2);
     }
 }
 
@@ -927,7 +990,7 @@ void CompileShader()
     remove(DATA_PATH);
     remove(VERTEX_PATH);
     remove(FRAGMENT_PATH);
-    textureCount = 0;
+    for (int i = 0; i < MAX_TEXTURES; i++) usedUnits[i] = false;
 
     // Open shader data file
     FILE *dataFile = fopen(DATA_PATH, "w");
@@ -1030,7 +1093,6 @@ void CompileShader()
         "    fragColor = vertexColor;     \n\n";
         fprintf(vertexFile, vMain);
 
-        textureCount = 0;
         CompileNode(nodes[index], vertexFile, false);
 
         switch (nodes[index]->output.dataCount)
@@ -1084,7 +1146,6 @@ void CompileShader()
         "\nvoid main()                      \n"
         "{                                  \n";
         fprintf(fragmentFile, fMain);
-        textureCount = 0;
 
         CompileNode(nodes[index], fragmentFile, true);
 
@@ -1118,8 +1179,8 @@ void CheckConstant(FNode node, FILE *file)
 {
     switch (node->type)
     {
-        case FNODE_PI: fprintf(file, "const float node_%02i = 3.14159265358979323846;\n"); break;
-        case FNODE_E: fprintf(file, "const float node_%02i = 2.71828182845904523536;\n"); break;
+        case FNODE_PI: fprintf(file, "const float node_%02i = 3.14159265358979323846;\n", node->id); break;
+        case FNODE_E: fprintf(file, "const float node_%02i = 2.71828182845904523536;\n", node->id); break;
         case FNODE_VALUE:
         {
             if (node->property)
@@ -1158,9 +1219,14 @@ void CheckConstant(FNode node, FILE *file)
         } break;
         case FNODE_SAMPLER2D:
         {
-            const char fConstantSampler[] = "uniform sampler2D texture%i;\n";
-            fprintf(file, fConstantSampler, textureCount);
-            textureCount++;
+            char fConstantSampler[32] = { '\0' };
+            int index = GetNodeIndex(node->inputs[0]);
+            sprintf(fConstantSampler, "uniform sampler2D texture%i;\n", (int)nodes[index]->output.data[0].value);
+            if (!usedUnits[(int)nodes[index]->output.data[0].value])
+            {
+                fprintf(file, fConstantSampler);
+                usedUnits[(int)nodes[index]->output.data[0].value] = true;
+            }
         } break;
         default:
         {
@@ -1207,7 +1273,7 @@ void CompileNode(FNode node, FILE *file, bool fragment)
         if (!FSearch(FRAGMENT_PATH, check))
         {
             // Variable definition based on current node output data count
-            char body[2048] = { '\0' };
+            char body[4096] = { '\0' };
             char definition[32] = { '\0' };
             switch (node->output.dataCount)
             {
@@ -1244,10 +1310,22 @@ void CompileNode(FNode node, FILE *file, bool fragment)
                     case FNODE_MVP: strcat(body, "mvpMatrix;\n"); break;
                     case FNODE_SAMPLER2D:
                     {
-                        char test[64] = { '\0' };
-                        sprintf(test, "texture(texture%i, fragTexCoord);\n", textureCount);
+                        char test[128] = { '\0' };
+
+                        int indexA = GetNodeIndex(node->inputs[0]);
+                        int indexB = GetNodeIndex(node->inputs[1]);
+                        switch ((int)nodes[indexB]->output.data[0].value)
+                        {
+                            case 0: sprintf(test, "texture(texture%i, fragTexCoord);\n    if (node_%02i.a == 0.0) discard;\n", (int)nodes[indexA]->output.data[0].value, node->id); break;
+                            case 1: sprintf(test, "texture(texture%i, fragTexCoord).rgb;\n", (int)nodes[indexA]->output.data[0].value); break;
+                            case 2: sprintf(test, "texture(texture%i, fragTexCoord).r;\n", (int)nodes[indexA]->output.data[0].value); break;
+                            case 3: sprintf(test, "texture(texture%i, fragTexCoord).g;\n", (int)nodes[indexA]->output.data[0].value); break;
+                            case 4: sprintf(test, "texture(texture%i, fragTexCoord).b;\n", (int)nodes[indexA]->output.data[0].value); break;
+                            case 5: sprintf(test, "texture(texture%i, fragTexCoord).a;\n    if (node_%02i == 0.0) discard;\n", (int)nodes[indexA]->output.data[0].value, node->id); break;
+                            default: sprintf(test, "texture(texture%i, fragTexCoord);\n", (int)nodes[indexA]->output.data[0].value); break;
+                        }
+
                         strcat(body, test);
-                        textureCount++;
                         break;
                     }
                     default: break;
@@ -1290,18 +1368,26 @@ void CompileNode(FNode node, FILE *file, bool fragment)
             }
             else if (node->type >= FNODE_APPEND)
             {
-                char temp[64] = { '\0' };
+                char temp[128] = { '\0' };
                 switch (node->type)
                 {
                     case FNODE_APPEND:
                     {
                         switch (node->output.dataCount)
                         {
-                            case 1: sprintf(temp, "node_%02i;\n", node->inputs[0]); break;
-                            case 2: sprintf(temp, "vec2(node_%02i, node_%02i);\n", node->inputs[0], node->inputs[1]); break;
-                            case 3: sprintf(temp, "vec3(node_%02i, node_%02i, node_%02i);\n", node->inputs[0], node->inputs[1], node->inputs[2]); break;
-                            case 4: sprintf(temp, "vec4(node_%02i, node_%02i, node_%02i, node_%02i);\n", node->inputs[0], node->inputs[1], node->inputs[2], node->inputs[3]); break;
+                            case 2: strcat(temp, "vec2("); break;
+                            case 3: strcat(temp, "vec3("); break;
+                            case 4: strcat(temp, "vec4("); break;
                             default: break;
+                        }
+
+                        for (int i = 0; i < node->inputsCount; i++)
+                        {
+                            char append[32] = { '\0' };
+                            if ((i + 1) == node->inputsCount) sprintf(append, "node_%02i);\n", node->inputs[i]);
+                            else sprintf(append, "node_%02i, ", node->inputs[i]);
+                            
+                            strcat(temp, append);
                         }
                     } break;
                     case FNODE_ONEMINUS: sprintf(temp, "(1 - node_%02i);\n", node->inputs[0]); break;
@@ -1323,10 +1409,11 @@ void CompileNode(FNode node, FILE *file, bool fragment)
                         switch ((int)nodes[index]->output.data[0].value)
                         {
                             case 0: sprintf(temp, (fragment ? "fragColor;\n" : "vertexColor;\n")); break;
-                            case 1: sprintf(temp, (fragment ? "fragColor.r;\n" : "vertexColor.r;\n")); break;
-                            case 2: sprintf(temp, (fragment ? "fragColor.g;\n" : "vertexColor.g;\n")); break;
-                            case 3: sprintf(temp, (fragment ? "fragColor.b;\n" : "vertexColor.b;\n")); break;
-                            case 4: sprintf(temp, (fragment ? "fragColor.a;\n" : "vertexColor.a;\n")); break;
+                            case 1: sprintf(temp, (fragment ? "fragColor.rgb;\n" : "vertexColor.rgb;\n")); break;
+                            case 2: sprintf(temp, (fragment ? "fragColor.r;\n" : "vertexColor.r;\n")); break;
+                            case 3: sprintf(temp, (fragment ? "fragColor.g;\n" : "vertexColor.g;\n")); break;
+                            case 4: sprintf(temp, (fragment ? "fragColor.b;\n" : "vertexColor.b;\n")); break;
+                            case 5: sprintf(temp, (fragment ? "fragColor.a;\n" : "vertexColor.a;\n")); break;
                             default: break;
                         }
                     } break;
@@ -1338,7 +1425,7 @@ void CompileNode(FNode node, FILE *file, bool fragment)
                     case FNODE_POSTERIZE: sprintf(temp, "floor(node_%02i*node_%02i)/node_%02i;\n", node->inputs[0], node->inputs[1], node->inputs[1]); break;
                     case FNODE_MAX: sprintf(temp, "max(node_%02i, node_%02i);\n", node->inputs[0], node->inputs[1], node->inputs[1]); break;
                     case FNODE_MIN: sprintf(temp, "min(node_%02i, node_%02i);\n", node->inputs[0], node->inputs[1], node->inputs[1]); break;
-                    case FNODE_LERP: sprintf(temp, "lerp(node_%02i, node_%02i, node_%02i);\n", node->inputs[0], node->inputs[1], node->inputs[2]); break;
+                    case FNODE_LERP: sprintf(temp, "mix(node_%02i, node_%02i, node_%02i);\n", node->inputs[0], node->inputs[1], node->inputs[2]); break;
                     case FNODE_SMOOTHSTEP: sprintf(temp, "smoothstep(node_%02i, node_%02i, node_%02i);\n", node->inputs[0], node->inputs[1], node->inputs[2]); break;
                     case FNODE_CROSSPRODUCT: sprintf(temp, "cross(node_%02i, node_%02i);\n", node->inputs[0], node->inputs[1]); break;
                     case FNODE_DESATURATE:
@@ -1488,31 +1575,71 @@ void DrawCanvasGrid(int divisions)
 // Draws a visor with default model rotating and current shader
 void DrawVisor()
 {
-    BeginTextureMode(visorTarget);
-    
-        DrawRectangle(0, 0, screenSize.x, screenSize.y, GRAY);
+    if (fullVisor)
+    {
+        BeginTextureMode(visorTarget);
+        
+            DrawRectangle(0, 0, screenSize.x, screenSize.y, GRAY);
 
-        Begin3dMode(camera3d);
+            Begin3dMode(camera3d);
 
-            DrawModelEx(model, (Vector3){ 0.0f, -0.75f, 0.0f }, (Vector3){ 0, 1, 0 }, modelRotation, (Vector3){ VISOR_MODEL_SCALE, VISOR_MODEL_SCALE, VISOR_MODEL_SCALE }, WHITE);
+                DrawModelEx(model, (Vector3){ 0.0f, -1.0f, 0.0f }, (Vector3){ 0, 1, 0 }, modelRotation, (Vector3){ VISOR_MODEL_SCALE, VISOR_MODEL_SCALE, VISOR_MODEL_SCALE }, RED);
 
-        End3dMode();
+            End3dMode();
 
-    EndTextureMode();
+        EndTextureMode();
 
-    Rectangle visor = { canvasSize.x - visorTarget.texture.width - UI_PADDING, screenSize.y - visorTarget.texture.height - UI_PADDING, visorTarget.texture.width, visorTarget.texture.height };
-    DrawRectangle(visor.x - VISOR_BORDER, visor.y - VISOR_BORDER, visor.width + VISOR_BORDER*2, visor.height + VISOR_BORDER*2, BLACK);
+        BeginShaderMode(fxaa);
 
-    BeginShaderMode(fxaa);
+            DrawTexturePro(visorTarget.texture, (Rectangle){ 0, 0, visorTarget.texture.width, -visorTarget.texture.height }, (Rectangle){ 0, 0, screenSize.x, screenSize.y }, (Vector2){ 0, 0 }, 0.0f, WHITE);
 
-        DrawTexturePro(visorTarget.texture, (Rectangle){ 0, 0, visorTarget.texture.width, -visorTarget.texture.height }, visor, (Vector2){ 0, 0 }, 0.0f, WHITE);
+        EndShaderMode();
+    }
+    else
+    {
+        BeginTextureMode(visorTarget);
+        
+            DrawRectangle(0, 0, screenSize.x, screenSize.y, GRAY);
 
-    EndShaderMode();
+            Begin3dMode(camera3d);
+
+                DrawModelEx(model, (Vector3){ 0.0f, -1.0f, 0.0f }, (Vector3){ 0, 1, 0 }, modelRotation, (Vector3){ VISOR_MODEL_SCALE, VISOR_MODEL_SCALE, VISOR_MODEL_SCALE }, RED);
+
+            End3dMode();
+
+        EndTextureMode();
+
+        Rectangle visor = { canvasSize.x - visorTarget.texture.width - UI_PADDING, screenSize.y - visorTarget.texture.height - UI_PADDING, visorTarget.texture.width, visorTarget.texture.height };
+        DrawRectangle(visor.x - VISOR_BORDER, visor.y - VISOR_BORDER, visor.width + VISOR_BORDER*2, visor.height + VISOR_BORDER*2, BLACK);
+
+        BeginShaderMode(fxaa);
+
+            DrawTexturePro(visorTarget.texture, (Rectangle){ 0, 0, visorTarget.texture.width, -visorTarget.texture.height }, visor, (Vector2){ 0, 0 }, 0.0f, WHITE);
+
+        EndShaderMode();
+    }
 }
 
 // Draw interface to create nodes
 void DrawInterface()
 {
+    if (help)
+    {
+        DrawRectangle(5, 5, 450, 200, (Color){ 150, 150, 150, 150 });
+        DrawRectangleLines(5, 5, 450, 200, BLACK);
+        
+        DrawText("Welcome to FNode 1.0, adventurer!", 15, 15, 10, BLACK);
+        DrawText("Controls:", 15, 35, 10, BLACK);
+        DrawText("- Drag Canvas/Node: LEFT MOUSE BUTTON", 35, 55, 10, BLACK);
+        DrawText("- Drag Comment: LEFT ALT + LEFT MOUSE BUTTON (DRAG IN COMMENT)", 35, 75, 10, BLACK);
+        DrawText("- Create Comment: LEFT ALT + LEFT MOUSE BUTTON (DRAG IN CANVAS)", 35, 95, 10, BLACK);
+        DrawText("- Delete Node/Line/Comment: RIGHT MOUSE BUTTON", 35, 115, 10, BLACK);
+        DrawText("- Link: LEFT MOUSE BUTTON (INPUT/OUTPUT RECTANGLES)", 35, 135, 10, BLACK);
+        DrawText("- Preview: RIGHT ALT BUTTON", 35, 155, 10, BLACK);
+        DrawText("More info at www.victorfisac.com/fnode", 15, 180, 10, BLACK);
+    }
+    else DrawText("Press 'H' to display HELP menu", 10, 10, 10, BLACK);
+    
     // Draw interface background
     DrawRectangleRec((Rectangle){ canvasSize.x, 0.0f, screenSize.x - canvasSize.x, screenSize.y }, DARKGRAY);
 
@@ -1533,7 +1660,7 @@ void DrawInterface()
     DrawText("Properties", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Properties", 10))/2 - UI_PADDING_SCROLL/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, 10, WHITE); menuOffset++;
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Value")) CreateNodeProperty(FNODE_VALUE, "Value", 1, 0);
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Color")) CreateNodeProperty(FNODE_VECTOR4, "Color", 4, 0);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Sampler 2D")) CreateNodeProperty(FNODE_SAMPLER2D, "Sampler 2D", 4, 0);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Sampler 2D")) CreateNodeProperty(FNODE_SAMPLER2D, "Sampler 2D", 4, 2);
     
     DrawText("Arithmetic", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Arithmetic", 10))/2 - UI_PADDING_SCROLL/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, 10, WHITE); menuOffset++;
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Add")) CreateNodeOperator(FNODE_ADD, "Add", MAX_INPUTS);
@@ -1608,12 +1735,33 @@ void DrawInterface()
         "editSize: %i\n"
         "editSizeType: %i\n"
         "editComment: %i\n"
-        "editNodeText: %s";
+        "editNodeText: %s\n"
+        "loadedFiles: %i\n";
 
-        DrawText(FormatText(string, loadedShader, selectedNode, editNode, lineState, commentState, selectedComment, editSize, editSizeType, editComment, ((editNodeText != NULL) ? editNodeText : "NULL")), 10, 30, 10, BLACK);
+        DrawText(FormatText(string, loadedShader, selectedNode, editNode, lineState, commentState, selectedComment, editSize, editSizeType, editComment, ((editNodeText != NULL) ? editNodeText : "NULL"), loadedFiles), 10, 30, 10, BLACK);
 
         DrawFPS(10, 10);
     }
+}
+
+// Returns the extension of a file
+char *GetFileExtension(char *filename)
+{
+    char *dot = strrchr(filename, '.');
+    if (!dot || dot == filename) return "";
+    return (dot + 1);
+}
+
+// Check filename for specific extension
+bool CheckFileExtension(char *filename, char *extension)
+{
+    return (strcmp(GetFileExtension(filename),extension) == 0);
+}
+
+// Check filename for compatible texture extensions
+bool CheckTextureExtension(char *filename)
+{
+    return (CheckFileExtension(filename, "jpg") || CheckFileExtension(filename, "png") || CheckFileExtension(filename, "tga") || CheckFileExtension(filename, "tiff") || CheckFileExtension(filename, "bmp"));
 }
 
 //----------------------------------------------------------------------------------
@@ -1624,14 +1772,18 @@ int main()
     // Initialization
     //--------------------------------------------------------------------------------------
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
-    InitWindow(screenSize.x, screenSize.y, "fnode 1.0");
+    InitWindow(screenSize.x, screenSize.y, "fnode 1.0 - Created by Victor Fisac (www.victorfisac.com) [powered by raylib]");
     SetTargetFPS(60);
     SetLineWidth(3);
 
     // Load resources
-    model = LoadModel("res/plant.obj");
+    model = LoadModel("res/meshes/plant.obj");
     visorTarget = LoadRenderTexture(screenSize.x/4, screenSize.y/4);
-    fxaa = LoadShader("res/fxaa.vs", "res/fxaa.fs");
+    fxaa = LoadShader("res/shaders/fxaa.vs", "res/shaders/fxaa.fs");
+    textures[0] = LoadTexture("res/textures/plant_vc.tga");
+    textures[1] = LoadTexture("res/textures/plant.tga");
+    model.material.texDiffuse = textures[0];
+    model.material.texNormal = textures[1];
 
     // Initialize values
     camera = (Camera2D){ (Vector2){ 0, 0 }, (Vector2){ screenSize.x/2, screenSize.y/2 }, 0.0f, 1.0f };
@@ -1641,12 +1793,11 @@ int main()
 
     // Initialize shaders values
     fxaaUniform = GetShaderLocation(fxaa, "viewportSize");
-    float viewportSize[2] = { screenSize.x/4, screenSize.y/4 };
-    SetShaderValue(fxaa, fxaaUniform, viewportSize, 2);
 
     // Setup orbital camera
-    SetCameraPosition(camera3d.position);     // Set internal camera position to match our camera position
-    SetCameraTarget(camera3d.target);         // Set internal camera target to match our camera target
+    SetCameraPosition(camera3d.position);
+    SetCameraTarget(camera3d.target);
+    SetCameraMode(CAMERA_FREE);
 
     InitFNode();
     CheckPreviousShader();
@@ -1658,6 +1809,7 @@ int main()
         // Update
         //----------------------------------------------------------------------------------
         UpdateMouseData();
+        UpdateInputsData();
         UpdateCanvas();
         UpdateScroll();
         UpdateNodesEdit();
@@ -1667,8 +1819,6 @@ int main()
         UpdateCommentsEdit();
         UpdateCommentsDrag();
         UpdateShaderData();
-
-        if (IsKeyPressed('P')) debugMode = !debugMode;
         //----------------------------------------------------------------------------------
 
         // Draw
@@ -1690,6 +1840,7 @@ int main()
     UnloadModel(model);
     UnloadShader(fxaa);
     if (loadedShader) UnloadShader(shader);
+    for (int i = 0; i < MAX_TEXTURES; i++) UnloadTexture(textures[i]);
 
     CloseFNode();
     CloseWindow();        // Close window and OpenGL context
