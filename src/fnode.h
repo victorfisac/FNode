@@ -2725,19 +2725,21 @@ int FSearch(char *filename, char *string)
 	int found = 0;
 	char temp[512];
 
-	if ((file = fopen(filename, "r")) == NULL) TraceLogFNode(0, "(1) error when trying to open a file to search in");
+	file = fopen(filename, "r");
 
-	while (fgets(temp, 512, file) != NULL) 
+    if (file != NULL)
     {
-		if ((strstr(temp, string)) != NULL)
+        while (fgets(temp, 512, file) != NULL) 
         {
-            found = 1;
-            break;
+            if ((strstr(temp, string)) != NULL)
+            {
+                found = 1;
+                break;
+            }
         }
-	}
 
-    // Close file if needed
-	if (file) fclose(file);
+        fclose(file);
+    }
 
    	return found;
 }
