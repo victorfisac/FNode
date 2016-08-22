@@ -54,7 +54,8 @@
 #define     UI_COMMENT_HEIGHT           25                      // Interface comment text box height
 #define     UI_BUTTON_DEFAULT_COLOR     LIGHTGRAY               // Interface button background color
 #define     UI_BORDER_DEFAULT_COLOR     125                     // Interface button border color
-
+#define     UI_TOGGLE_TEXT_PADDING      20                      // Interface toggle text padding
+#define     UI_TOGGLE_BORDER_WIDTH      2                       // Interface toogle border width
 #define     FNODE_MALLOC(size)          malloc(size)            // Memory allocation function as define
 #define     FNODE_FREE(ptr)             free(ptr)               // Memory deallocation function as define
 
@@ -120,11 +121,22 @@ typedef enum {
 } FNodeType;
 
 typedef enum {
+    GLSL_330,
+    GLSL_100
+} ShaderVersion;
+
+typedef enum {
     BUTTON_DEFAULT,
     BUTTON_HOVER,
     BUTTON_PRESSED,
     BUTTON_CLICKED
 } ButtonState;
+
+typedef enum { 
+    TOGGLE_UNACTIVE,
+    TOGGLE_PRESSED,
+    TOGGLE_ACTIVE 
+} ToggleState;
 
 //----------------------------------------------------------------------------------
 // Types and Structures Definition
@@ -215,7 +227,7 @@ Camera2D camera;                            // Node area 2d camera for panning
 Camera camera3d;                            // Visor camera 3d for model and shader visualization
 bool debugMode = false;                     // Drawing debug information state
 int menuOffset = 0;                         // Interface elements position current offset
-
+bool interact = true;                       // Buttons and text can interact state
 //------------------------------------------------------------------------------------
 // FNode Functions 
 //------------------------------------------------------------------------------------
@@ -245,6 +257,7 @@ void DrawNode(FNode node);                                                  // D
 void DrawNodeLine(FLine line);                                              // Draws a previously created node line
 void DrawComment(FComment comment);                                         // Draws a previously created comment
 bool FButton(Rectangle bounds, const char *text);                           // Button element, returns true when pressed
+bool FToggle(Rectangle bounds, bool toggle);                                // Toggle Button element, returns true when active
 void DestroyNode(FNode node);                                               // Destroys a node and its linked lines
 void DestroyNodeLine(FLine line);                                           // Destroys a node line
 void DestroyComment(FComment comment);                                      // Destroys a comment
@@ -1653,7 +1666,7 @@ void DrawNode(FNode node)
 
         if ((node->type >= FNODE_MATRIX) && (node->type <= FNODE_VECTOR4))
         {
-            if (node->id == editNode)
+            if ((node->id == editNode) && interact)
             {
                 int charac = -1;
                 charac = GetKeyPressed();
@@ -1910,7 +1923,7 @@ void DrawComment(FComment comment)
             DrawRectangleLines(comment->sizeBrShape.x, comment->sizeBrShape.y, comment->sizeBrShape.width, comment->sizeBrShape.height, BLACK);
         }
 
-        if (comment->id == editComment)
+        if ((comment->id == editComment) && interact)
         {
             int letter = -1;
             letter = GetKeyPressed();
@@ -1970,7 +1983,10 @@ bool FButton(Rectangle bounds, const char *text)
     if (bounds.width < (MeasureText(text, 10) + 20)) bounds.width = MeasureText(text, 10) + 20;
     if (bounds.height < 10) bounds.height = 10 + 40;
 
-    if (CheckCollisionPointRec(GetMousePosition(), bounds))
+    bool canInteract = interact;
+    if ((strcmp(text, "Close") == 0) || (strcmp(text, "<") == 0) || (strcmp(text, ">") == 0)) canInteract = true;
+
+    if (CheckCollisionPointRec(GetMousePosition(), bounds) && canInteract)
     {
         if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) buttonState = BUTTON_PRESSED;
         else if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) buttonState = BUTTON_CLICKED;
@@ -2004,6 +2020,60 @@ bool FButton(Rectangle bounds, const char *text)
     menuOffset++;
 
     return (buttonState == BUTTON_CLICKED);
+}
+
+// Toggle Button element, returns true when active
+bool FToggle(Rectangle bounds, bool toggle)
+{
+    ToggleState toggleState = TOGGLE_UNACTIVE;
+    Rectangle toggleButton = bounds;
+    Vector2 mousePoint = GetMousePosition();
+    
+    if (toggle) toggleState = TOGGLE_ACTIVE;
+    else toggleState = TOGGLE_UNACTIVE;
+    
+    if (CheckCollisionPointRec(mousePoint, toggleButton))
+    {
+        if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) toggleState = TOGGLE_PRESSED;
+        else if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON))
+        {
+            if (toggle)
+            {
+                toggle = false;
+                toggleState = TOGGLE_UNACTIVE;
+                glDisable(GL_CULL_FACE);
+            }
+            else
+            {
+                toggle = true;
+                toggleState = TOGGLE_ACTIVE;
+                glEnable(GL_CULL_FACE);
+            }
+        }
+    }
+
+    switch (toggleState)
+    {
+        case TOGGLE_UNACTIVE:
+        {
+            DrawRectangleRec(toggleButton, (Color){ UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, 255 });
+            DrawRectangle((toggleButton.x + UI_TOGGLE_BORDER_WIDTH), (toggleButton.y + UI_TOGGLE_BORDER_WIDTH) , (toggleButton.width - (2*UI_TOGGLE_BORDER_WIDTH)), (toggleButton.height - (2*UI_TOGGLE_BORDER_WIDTH)), RAYWHITE);
+        } break;
+        case TOGGLE_PRESSED:
+        {
+            DrawRectangleRec(toggleButton, (Color){ UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, 255 });
+            DrawRectangle((toggleButton.x + UI_TOGGLE_BORDER_WIDTH), (toggleButton.y + UI_TOGGLE_BORDER_WIDTH) , (toggleButton.width - (2*UI_TOGGLE_BORDER_WIDTH)), (toggleButton.height - (2*UI_TOGGLE_BORDER_WIDTH)), DARKGRAY);
+        } break;
+        case TOGGLE_ACTIVE:
+        {
+            DrawRectangleRec(toggleButton, (Color){ UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, 255 });
+            DrawRectangle((toggleButton.x + UI_TOGGLE_BORDER_WIDTH), (toggleButton.y + UI_TOGGLE_BORDER_WIDTH) , (toggleButton.width - (2*UI_TOGGLE_BORDER_WIDTH)), (toggleButton.height - (2*UI_TOGGLE_BORDER_WIDTH)), RAYWHITE);
+            DrawRectangle((toggleButton.x + UI_TOGGLE_BORDER_WIDTH*2), (toggleButton.y + UI_TOGGLE_BORDER_WIDTH*2) , (toggleButton.width - (4*UI_TOGGLE_BORDER_WIDTH)), (toggleButton.height - (4*UI_TOGGLE_BORDER_WIDTH)), DARKGRAY);
+        } break;
+        default: break;
+    }
+
+    return toggle;
 }
 
 // Destroys a node and its linked lines

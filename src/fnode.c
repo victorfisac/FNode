@@ -37,12 +37,13 @@
 #define     UI_SCROLL                   20                      // Interface scroll sensitivity
 #define     UI_GRID_ALPHA               0.25f                   // Interface canvas background grid lines alpha
 #define     VISOR_MODEL_SCALE           11.0f                   // Visor model scale
-#define     VISOR_MODEL_ROTATION        0.1f                    // Visor model rotation speed
+#define     VISOR_MODEL_ROTATION        0.01f                   // Visor model rotation speed
 #define     VISOR_BORDER                2                       // Visor window border width
 #define     VERTEX_PATH                 "output/shader.vs"      // Vertex shader output path
 #define     FRAGMENT_PATH               "output/shader.fs"      // Fragment shader output path
 #define     DATA_PATH                   "output/shader.fnode"   // Shader data output path
 #define     MAX_TEXTURES                30                      // Shader maximum texture units
+#define     COMPILE_DURATION            120                     // Shader compile result duration
 
 //----------------------------------------------------------------------------------
 // Global Variables
@@ -77,6 +78,12 @@ bool usedUnits[MAX_TEXTURES] = { false };   // Shader compiling used texture uni
 bool fullVisor = false;                     // Visor full screen state
 bool help = false;                          // Display help message state
 bool visorState = false;                    // Visor camera control state
+bool settings = false;                      // Interface settings window state
+ShaderVersion version = GLSL_330;           // Current shader version setting
+bool backfaceCulling = false;               // Current shader backface culling state
+int compileState = -1;                      // Compile state (awiting, successful, failed)
+int framesCounter = 0;                      // Global frames counter
+int compileFrame = 0;                       // Compile time frames count
 
 //----------------------------------------------------------------------------------
 // Functions Declaration
@@ -262,7 +269,7 @@ void UpdateMouseData()
 // Updates current inputs states
 void UpdateInputsData()
 {
-    if (IsKeyPressed('P')) debugMode = !debugMode;
+    // if (IsKeyPressed('P')) debugMode = !debugMode;
     if (IsKeyPressed('H')) help = !help;
     else if (IsKeyPressed(KEY_RIGHT_ALT))
     {
@@ -273,7 +280,7 @@ void UpdateInputsData()
         if (!fullVisor) camera3d = (Camera){{ 0.0f, 0.0f, 4.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, 45.0f };
     }
 
-    if(fullVisor) UpdateCamera(&camera3d);
+    if (fullVisor) UpdateCamera(&camera3d);
 }
 
 // Updates canvas space target and offset
@@ -935,6 +942,16 @@ void UpdateCommentsEdit()
 void UpdateShaderData()
 {
     currentTime += GetFrameTime();
+    framesCounter++;
+    
+    if (compileState >= 0)
+    {
+        if (framesCounter - compileFrame >= COMPILE_DURATION)
+        {
+            compileState = -1;
+            compileFrame = 0;
+        }
+    }
     
     if (IsFileDropped())
     {
@@ -944,6 +961,7 @@ void UpdateShaderData()
         
         if (CheckTextureExtension(path) && (loadedFiles < MAX_TEXTURES))
         {
+            if (textures[loadedFiles].id != 0) UnloadTexture(textures[loadedFiles]);
             textures[loadedFiles] = LoadTexture(path);
             
             if (shader.id != 0)
@@ -958,6 +976,7 @@ void UpdateShaderData()
             }
             
             loadedFiles++;
+            if (loadedFiles == MAX_TEXTURES) loadedFiles = 0;
         }
         else TraceLogFNode(false, "error when trying to import a non texture file or achieved maximum number of textures");
         
@@ -986,11 +1005,14 @@ void UpdateShaderData()
 // Compiles all node structure to create the GLSL fragment shader in output folder
 void CompileShader()
 {
+    // Reset previous compiled shader data
     if (loadedShader) UnloadShader(shader);
     remove(DATA_PATH);
     remove(VERTEX_PATH);
     remove(FRAGMENT_PATH);
     for (int i = 0; i < MAX_TEXTURES; i++) usedUnits[i] = false;
+    compileState = -1;
+    compileFrame = 0;
 
     // Open shader data file
     FILE *dataFile = fopen(DATA_PATH, "w");
@@ -1056,28 +1078,65 @@ void CompileShader()
     FILE *vertexFile = fopen(VERTEX_PATH, "w");
     if (vertexFile != NULL)
     {
+        const char vCredits[] = "// Shader created with FNode 1.0 - Credits: Victor Fisac\n\n";
+        fprintf(vertexFile, vCredits);
+
         // Vertex shader definition to embed, no external file required
-        const char vHeader[] = 
-        "#version 330                     \n\n";
-        fprintf(vertexFile, vHeader);
+        switch (version)
+        {
+            case GLSL_330:
+            {
+                const char vHeader[] = "#version 330\n\n";
+                fprintf(vertexFile, vHeader);
+            } break;
+            case GLSL_100:
+            {
+                const char vHeader[] = "#version 100\n\n";
+                fprintf(vertexFile, vHeader);
+            } break;
+            default: break;
+        }
 
-        const char vIn[] = 
-        "in vec3 vertexPosition;            \n"
-        "in vec3 vertexNormal;              \n"
-        "in vec2 vertexTexCoord;            \n"
-        "in vec4 vertexColor;             \n\n";
-        fprintf(vertexFile, vIn);
+        switch (version)
+        {
+            case GLSL_330:
+            {
+                const char vIn[] = 
+                "in vec3 vertexPosition;\n"
+                "in vec3 vertexNormal;\n"
+                "in vec2 vertexTexCoord;\n"
+                "in vec4 vertexColor;\n\n";
+                fprintf(vertexFile, vIn);
 
-        const char vOut[] = 
-        "out vec3 fragPosition;             \n"
-        "out vec3 fragNormal;               \n"
-        "out vec2 fragTexCoord;             \n"
-        "out vec4 fragColor;              \n\n";
-        fprintf(vertexFile, vOut);
+                const char vOut[] = 
+                "out vec3 fragPosition;\n"
+                "out vec3 fragNormal;\n"
+                "out vec2 fragTexCoord;\n"
+                "out vec4 fragColor;\n\n";
+                fprintf(vertexFile, vOut);
+            } break;
+            case GLSL_100:
+            {
+                const char vIn[] = 
+                "attribute vec3 vertexPosition;\n"
+                "attribute vec3 vertexNormal;\n"
+                "attribute vec2 vertexTexCoord;\n"
+                "attribute vec4 vertexColor;\n\n";
+                fprintf(vertexFile, vIn);
+
+                const char vOut[] = 
+                "varying vec3 fragPosition;\n"
+                "varying vec3 fragNormal;\n"
+                "varying vec2 fragTexCoord;\n"
+                "varying vec4 fragColor;\n\n";
+                fprintf(vertexFile, vOut);
+            } break;
+            default: break;
+        }
 
         const char vUniforms[] = 
-        "uniform mat4 mvpMatrix;            \n"
-        "uniform float vertCurrentTime;   \n\n";
+        "uniform mat4 mvpMatrix;\n"
+        "uniform float vertCurrentTime;\n\n";
         fprintf(vertexFile, vUniforms);
         
         fprintf(vertexFile, "// Constant and uniform values\n");
@@ -1085,12 +1144,12 @@ void CompileShader()
         CheckConstant(nodes[index], vertexFile);
 
         const char vMain[] = 
-        "\nvoid main()                      \n"
-        "{                                  \n"
-        "    fragPosition = vertexPosition; \n"
-        "    fragNormal = vertexNormal;     \n"
-        "    fragTexCoord = vertexTexCoord; \n"
-        "    fragColor = vertexColor;     \n\n";
+        "\nvoid main()\n"
+        "{\n"
+        "    fragPosition = vertexPosition;\n"
+        "    fragNormal = vertexNormal;\n"
+        "    fragTexCoord = vertexTexCoord;\n"
+        "    fragColor = vertexColor;\n\n";
         fprintf(vertexFile, vMain);
 
         CompileNode(nodes[index], vertexFile, false);
@@ -1113,48 +1172,101 @@ void CompileShader()
     FILE *fragmentFile = fopen(FRAGMENT_PATH, "w");
     if (fragmentFile != NULL)
     {
+        const char vCredits[] = "// Shader created with FNode 1.0 - Credits: Victor Fisac\n\n";
+        fprintf(vertexFile, vCredits);
+
         // Fragment shader definition to embed, no external file required
-        const char fHeader[] = 
-        "#version 330                     \n\n";
-        fprintf(fragmentFile, fHeader);
+        switch (version)
+        {
+            case GLSL_330:
+            {
+                const char fHeader[] = "#version 330\n\n";
+                fprintf(vertexFile, fHeader);
+            } break;
+            case GLSL_100:
+            {
+                const char fHeader[] = "#version 100\n"
+                "precision mediump float;\n\n";
+                fprintf(vertexFile, fHeader);
+            } break;
+            default: break;
+        }
 
         fprintf(fragmentFile, "// Input attributes\n");
-        const char fIn[] = 
-        "in vec3 fragPosition;             \n"
-        "in vec3 fragNormal;               \n"
-        "in vec2 fragTexCoord;             \n"
-        "in vec4 fragColor;              \n\n";
-        fprintf(fragmentFile, fIn);
+        
+        switch (version)
+        {
+            case GLSL_330:
+            {
+                const char fIn[] = 
+                "in vec3 fragPosition;\n"
+                "in vec3 fragNormal;\n"
+                "in vec2 fragTexCoord;\n"
+                "in vec4 fragColor;\n\n";
+                fprintf(fragmentFile, fIn);
+            } break;
+            case GLSL_100:
+            {
+                const char fIn[] = 
+                "varying vec3 fragPosition;\n"
+                "varying vec3 fragNormal;\n"
+                "varying vec2 fragTexCoord;\n"
+                "varying vec4 fragColor;\n\n";
+                fprintf(fragmentFile, fIn);
+            } break;
+            default: break;
+        }
 
         fprintf(fragmentFile, "// Uniform attributes\n");
         const char fUniforms[] = 
-        "uniform vec3 viewDirection;       \n"
-        "uniform mat4 modelMatrix;         \n"
-        "uniform float fragCurrentTime;  \n\n";
+        "uniform vec3 viewDirection;\n"
+        "uniform mat4 modelMatrix;\n"
+        "uniform float fragCurrentTime;\n\n";
         fprintf(fragmentFile, fUniforms);
 
-        fprintf(fragmentFile, "// Output attributes\n");
-        const char fOut[] = 
-        "out vec4 finalColor;            \n\n";
-        fprintf(fragmentFile, fOut);
+        if (version == GLSL_330)
+        {
+            fprintf(fragmentFile, "// Output attributes\n");
+            const char fOut[] = 
+            "out vec4 finalColor;\n\n";
+            fprintf(fragmentFile, fOut);
+        }
 
         fprintf(fragmentFile, "// Constant and uniform values\n");
         int index = GetNodeIndex(nodes[1]->inputs[0]);
         CheckConstant(nodes[index], fragmentFile);
 
         const char fMain[] = 
-        "\nvoid main()                      \n"
-        "{                                  \n";
+        "\nvoid main()\n"
+        "{\n";
         fprintf(fragmentFile, fMain);
 
         CompileNode(nodes[index], fragmentFile, true);
 
-        switch (nodes[index]->output.dataCount)
+        switch (version)
         {
-            case 1: fprintf(fragmentFile, "\n    finalColor = vec4(node_%02i, node_%02i, node_%02i, 1.0);\n}", nodes[1]->inputs[0], nodes[1]->inputs[0], nodes[1]->inputs[0]); break;
-            case 2: fprintf(fragmentFile, "\n    finalColor = vec4(node_%02i.xy, 0.0, 1.0);\n}", nodes[1]->inputs[0]); break;
-            case 3: fprintf(fragmentFile, "\n    finalColor = vec4(node_%02i.xyz, 1.0);\n}", nodes[1]->inputs[0]); break;
-            case 4: fprintf(fragmentFile, "\n    finalColor = node_%02i;\n}", nodes[1]->inputs[0]); break;
+            case GLSL_330:
+            {
+                switch (nodes[index]->output.dataCount)
+                {
+                    case 1: fprintf(fragmentFile, "\n    finalColor = vec4(node_%02i, node_%02i, node_%02i, 1.0);\n}", nodes[1]->inputs[0], nodes[1]->inputs[0], nodes[1]->inputs[0]); break;
+                    case 2: fprintf(fragmentFile, "\n    finalColor = vec4(node_%02i.xy, 0.0, 1.0);\n}", nodes[1]->inputs[0]); break;
+                    case 3: fprintf(fragmentFile, "\n    finalColor = vec4(node_%02i.xyz, 1.0);\n}", nodes[1]->inputs[0]); break;
+                    case 4: fprintf(fragmentFile, "\n    finalColor = node_%02i;\n}", nodes[1]->inputs[0]); break;
+                    default: break;
+                }
+            } break;
+            case GLSL_100:
+            {
+                switch (nodes[index]->output.dataCount)
+                {
+                    case 1: fprintf(fragmentFile, "\n    gl_FragColor = vec4(node_%02i, node_%02i, node_%02i, 1.0);\n}", nodes[1]->inputs[0], nodes[1]->inputs[0], nodes[1]->inputs[0]); break;
+                    case 2: fprintf(fragmentFile, "\n    gl_FragColor = vec4(node_%02i.xy, 0.0, 1.0);\n}", nodes[1]->inputs[0]); break;
+                    case 3: fprintf(fragmentFile, "\n    gl_FragColor = vec4(node_%02i.xyz, 1.0);\n}", nodes[1]->inputs[0]); break;
+                    case 4: fprintf(fragmentFile, "\n    gl_FragColor = node_%02i;\n}", nodes[1]->inputs[0]); break;
+                    default: break;
+                }
+            } break;
             default: break;
         }
 
@@ -1171,7 +1283,12 @@ void CompileShader()
         transformUniform = GetShaderLocation(shader, "modelMatrix");
         timeUniformV = GetShaderLocation(shader, "vertCurrentTime");
         timeUniformF = GetShaderLocation(shader, "fragCurrentTime");
+        
+        compileState = 1;
     }
+    else compileState = 0;
+
+    compileFrame = framesCounter;
 }
 
 // Check nodes searching for constant values to define them in shaders
@@ -1314,15 +1431,36 @@ void CompileNode(FNode node, FILE *file, bool fragment)
 
                         int indexA = GetNodeIndex(node->inputs[0]);
                         int indexB = GetNodeIndex(node->inputs[1]);
-                        switch ((int)nodes[indexB]->output.data[0].value)
+                        
+                        switch (version)
                         {
-                            case 0: sprintf(test, "texture(texture%i, fragTexCoord);\n    if (node_%02i.a == 0.0) discard;\n", (int)nodes[indexA]->output.data[0].value, node->id); break;
-                            case 1: sprintf(test, "texture(texture%i, fragTexCoord).rgb;\n", (int)nodes[indexA]->output.data[0].value); break;
-                            case 2: sprintf(test, "texture(texture%i, fragTexCoord).r;\n", (int)nodes[indexA]->output.data[0].value); break;
-                            case 3: sprintf(test, "texture(texture%i, fragTexCoord).g;\n", (int)nodes[indexA]->output.data[0].value); break;
-                            case 4: sprintf(test, "texture(texture%i, fragTexCoord).b;\n", (int)nodes[indexA]->output.data[0].value); break;
-                            case 5: sprintf(test, "texture(texture%i, fragTexCoord).a;\n    if (node_%02i == 0.0) discard;\n", (int)nodes[indexA]->output.data[0].value, node->id); break;
-                            default: sprintf(test, "texture(texture%i, fragTexCoord);\n", (int)nodes[indexA]->output.data[0].value); break;
+                            case GLSL_330:
+                            {
+                                switch ((int)nodes[indexB]->output.data[0].value)
+                                {
+                                    case 0: sprintf(test, "texture(texture%i, fragTexCoord);\n    if (node_%02i.a == 0.0) discard;\n", (int)nodes[indexA]->output.data[0].value, node->id); break;
+                                    case 1: sprintf(test, "texture(texture%i, fragTexCoord).rgb;\n", (int)nodes[indexA]->output.data[0].value); break;
+                                    case 2: sprintf(test, "texture(texture%i, fragTexCoord).r;\n", (int)nodes[indexA]->output.data[0].value); break;
+                                    case 3: sprintf(test, "texture(texture%i, fragTexCoord).g;\n", (int)nodes[indexA]->output.data[0].value); break;
+                                    case 4: sprintf(test, "texture(texture%i, fragTexCoord).b;\n", (int)nodes[indexA]->output.data[0].value); break;
+                                    case 5: sprintf(test, "texture(texture%i, fragTexCoord).a;\n    if (node_%02i == 0.0) discard;\n", (int)nodes[indexA]->output.data[0].value, node->id); break;
+                                    default: sprintf(test, "texture(texture%i, fragTexCoord);\n", (int)nodes[indexA]->output.data[0].value); break;
+                                }
+                            } break;
+                            case GLSL_100:
+                            {
+                                switch ((int)nodes[indexB]->output.data[0].value)
+                                {
+                                    case 0: sprintf(test, "texture2D(texture%i, fragTexCoord);\n    if (node_%02i.a == 0.0) discard;\n", (int)nodes[indexA]->output.data[0].value, node->id); break;
+                                    case 1: sprintf(test, "texture2D(texture%i, fragTexCoord).rgb;\n", (int)nodes[indexA]->output.data[0].value); break;
+                                    case 2: sprintf(test, "texture2D(texture%i, fragTexCoord).r;\n", (int)nodes[indexA]->output.data[0].value); break;
+                                    case 3: sprintf(test, "texture2D(texture%i, fragTexCoord).g;\n", (int)nodes[indexA]->output.data[0].value); break;
+                                    case 4: sprintf(test, "texture2D(texture%i, fragTexCoord).b;\n", (int)nodes[indexA]->output.data[0].value); break;
+                                    case 5: sprintf(test, "texture2D(texture%i, fragTexCoord).a;\n    if (node_%02i == 0.0) discard;\n", (int)nodes[indexA]->output.data[0].value, node->id); break;
+                                    default: sprintf(test, "texture2D(texture%i, fragTexCoord);\n", (int)nodes[indexA]->output.data[0].value); break;
+                                }
+                            } break;
+                            default: break;
                         }
 
                         strcat(body, test);
@@ -1579,11 +1717,13 @@ void DrawVisor()
     {
         BeginTextureMode(visorTarget);
         
-            DrawRectangle(0, 0, screenSize.x, screenSize.y, GRAY);
+            DrawRectangle(0, 0, screenSize.x, screenSize.y, BLACK);
 
             Begin3dMode(camera3d);
+            
+                DrawGrid(10, 1.0f);
 
-                DrawModelEx(model, (Vector3){ 0.0f, -1.0f, 0.0f }, (Vector3){ 0, 1, 0 }, modelRotation, (Vector3){ VISOR_MODEL_SCALE, VISOR_MODEL_SCALE, VISOR_MODEL_SCALE }, RED);
+                DrawModelEx(model, (Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){ 0, 1, 0 }, modelRotation, (Vector3){ VISOR_MODEL_SCALE, VISOR_MODEL_SCALE, VISOR_MODEL_SCALE }, RED);
 
             End3dMode();
 
@@ -1647,7 +1787,12 @@ void DrawInterface()
     if (FButton((Rectangle){ UI_PADDING, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Compile")) CompileShader(); menuOffset = 1;
     if (FButton((Rectangle){ UI_PADDING + ((screenSize.x - canvasSize.x - UI_PADDING*2)/2 + UI_PADDING)*menuOffset, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Clear Graph")) ClearGraph();
     if (FButton((Rectangle){ UI_PADDING + ((screenSize.x - canvasSize.x - UI_PADDING*2)/2 + UI_PADDING)*menuOffset, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Align Nodes")) AlignAllNodes();
-    if (FButton((Rectangle){ UI_PADDING + ((screenSize.x - canvasSize.x - UI_PADDING*2)/2 + UI_PADDING)*menuOffset, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Clear Unused Nodes")) ClearUnusedNodes();
+    if (FButton((Rectangle){ UI_PADDING + ((screenSize.x - canvasSize.x - UI_PADDING*2)/2 + UI_PADDING)*menuOffset, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Clear Unused")) ClearUnusedNodes();
+    if (FButton((Rectangle){ UI_PADDING + ((screenSize.x - canvasSize.x - UI_PADDING*2)/2 + UI_PADDING)*menuOffset, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Settings"))
+    {
+        settings = true;
+        interact = false;
+    }
 
     // Draw interface nodes buttons
     DrawText("Constant Vectors", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Constant Vectors", 10))/2 - UI_PADDING_SCROLL/2, UI_PADDING*4 - menuScroll, 10, WHITE); menuOffset = 1;
@@ -1723,6 +1868,49 @@ void DrawInterface()
     DrawRectangle(menuScrollRec.x - 2, menuScrollRec.y - 2, menuScrollRec.width + 4, menuScrollRec.height + 4, DARKGRAY);
     DrawRectangleRec(menuScrollRec, ((scrollState == 1) ? LIGHTGRAY : RAYWHITE));
 
+    if (settings)
+    {
+        DrawRectangle(0, 0, screenSize.x, screenSize.y, (Color){ 0, 0, 0, 100 });
+
+        #define     SETTINGS_WIDTH      300
+        #define     SETTINGS_HEIGHT     175
+
+        DrawRectangle((canvasSize.x - SETTINGS_WIDTH)/2, (canvasSize.y - SETTINGS_HEIGHT)/2, SETTINGS_WIDTH, SETTINGS_HEIGHT, LIGHTGRAY);
+        DrawRectangleLines((canvasSize.x - SETTINGS_WIDTH)/2, (canvasSize.y - SETTINGS_HEIGHT)/2, SETTINGS_WIDTH, SETTINGS_HEIGHT, BLACK);
+
+        DrawText("Settings", (canvasSize.x - SETTINGS_WIDTH)/2 + 15, (canvasSize.y - SETTINGS_HEIGHT)/2 + 15, 20, BLACK);
+        DrawText("Shader version", (canvasSize.x - SETTINGS_WIDTH)/2 + 15, (canvasSize.y - SETTINGS_HEIGHT)/2 + 50, 10, BLACK);
+        DrawText(((version == 0) ? "GLSL 330" : "GLSL 100"), (canvasSize.x - SETTINGS_WIDTH)/2 + SETTINGS_WIDTH/1.9f + MeasureText(((version == 0) ? "GLSL 330" : "GLSL 100"), 10)/2, (canvasSize.y - SETTINGS_HEIGHT)/2 + 50, 10, BLACK);
+
+        if (FButton((Rectangle){ (canvasSize.x - SETTINGS_WIDTH)/2 + SETTINGS_WIDTH/2 - 20, (canvasSize.y - SETTINGS_HEIGHT)/2 + 45, 20, 20 }, "<"))
+        {
+            version--; 
+            if (version < 0) version = 1;
+        }
+
+        if (FButton((Rectangle){ (canvasSize.x - SETTINGS_WIDTH)/2 + SETTINGS_WIDTH - 40, (canvasSize.y - SETTINGS_HEIGHT)/2 + 45, 20, 20 }, ">"))
+        {
+            version++; 
+            if (version > 1) version = 0;
+        }
+
+        if (FButton((Rectangle){ (canvasSize.x - SETTINGS_WIDTH)/2 + SETTINGS_WIDTH/2 - 40, (canvasSize.y - SETTINGS_HEIGHT)/2 + SETTINGS_HEIGHT/2 + 45, 80, 25 }, "Close"))
+        {
+            settings = false;
+            interact = true;
+        }
+        
+        DrawText("Backface Culling", (canvasSize.x - SETTINGS_WIDTH)/2 + 15, (canvasSize.y - SETTINGS_HEIGHT)/2 + 85, 10, BLACK);
+        
+        backfaceCulling = FToggle((Rectangle){ canvasSize.x/2 + 40, canvasSize.y/2 - 7, 20, 20 }, backfaceCulling);
+    }
+
+    if (compileState >= 0)
+    {
+        Rectangle compileRec = { UI_PADDING, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT };
+        DrawRectangleRec(compileRec, ((compileState == 1) ? Fade(GREEN, 0.5f) : Fade(RED, 0.5f)));
+    }
+
     if (debugMode)
     {
         const char *string = 
@@ -1736,9 +1924,12 @@ void DrawInterface()
         "editSizeType: %i\n"
         "editComment: %i\n"
         "editNodeText: %s\n"
-        "loadedFiles: %i\n";
+        "loadedFiles: %i\n"
+        "settings: %i\n"
+        "compileState: %i\n"
+        "backfaceCulling: %i\n";
 
-        DrawText(FormatText(string, loadedShader, selectedNode, editNode, lineState, commentState, selectedComment, editSize, editSizeType, editComment, ((editNodeText != NULL) ? editNodeText : "NULL"), loadedFiles), 10, 30, 10, BLACK);
+        DrawText(FormatText(string, loadedShader, selectedNode, editNode, lineState, commentState, selectedComment, editSize, editSizeType, editComment, ((editNodeText != NULL) ? editNodeText : "NULL"), loadedFiles, settings, compileState, backfaceCulling), 10, 30, 10, BLACK);
 
         DrawFPS(10, 10);
     }
@@ -1809,16 +2000,20 @@ int main()
         // Update
         //----------------------------------------------------------------------------------
         UpdateMouseData();
-        UpdateInputsData();
-        UpdateCanvas();
-        UpdateScroll();
-        UpdateNodesEdit();
-        UpdateNodesDrag();
-        UpdateNodesLink();
-        UpdateCommentCreationEdit();
-        UpdateCommentsEdit();
-        UpdateCommentsDrag();
-        UpdateShaderData();
+        
+        if (!settings)
+        {
+            UpdateInputsData();
+            UpdateCanvas();
+            UpdateScroll();
+            UpdateNodesEdit();
+            UpdateNodesDrag();
+            UpdateNodesLink();
+            UpdateCommentCreationEdit();
+            UpdateCommentsEdit();
+            UpdateCommentsDrag();
+            UpdateShaderData();
+        }
         //----------------------------------------------------------------------------------
 
         // Draw
@@ -1827,8 +2022,8 @@ int main()
 
             ClearBackground(RAYWHITE);
             DrawCanvas();
-            DrawInterface();
             DrawVisor();
+            DrawInterface();
 
         EndDrawing();
         //----------------------------------------------------------------------------------
