@@ -23,7 +23,9 @@ typedef enum {
     FNODE_ADD,
     FNODE_SUBTRACT,
     FNODE_MULTIPLY,
-    FNODE_DIVIDE
+    FNODE_DIVIDE,
+    FNODE_APPEND,
+    FNODE_ONEMINUS
 } FNodeType;
 
 // Structs
@@ -38,6 +40,7 @@ typedef struct FNodeData {
     const char *name;                       // Displayed name of the node
     int inputs[MAX_INPUTS];                 // Inputs node ids array
     unsigned int inputsCount;               // Inputs node ids array length
+    unsigned int inputsLimit;               // Inputs node ids length limit
     FNodeValue output;                      // Value output (contains the value and its length)
     Rectangle shape;                        // Node rectangle data
     Rectangle inputShape;                   // Node input rectangle data (automatically calculated from shape)
@@ -87,6 +90,8 @@ FNode CreateNodeAdd();                      // Creates an add node in center of 
 FNode CreateNodeSubtract();                 // Creates a subtract node in center of screen to subtract multiples values by the first linked
 FNode CreateNodeMultiply();                 // Creates a multiply node in center of screen to multiply different values
 FNode CreateNodeDivide();                   // Creates a divide node in center of screen to divide multiples values by the first linked
+FNode CreateNodeAppend();                   // Creates a append node in center of screen to combine little data types into bigger data types (2 int = 1 Vector2)
+FNode CreateNodeOneMinus();                 // Creates a one minus node in center of screen to subtract a value to 1
 FLine CreateNodeLine();                     // Creates a line between two nodes
 
 FNode InitializeNode();                     // Initializes a new node with generic parameters
@@ -104,11 +109,12 @@ float Vector2Length(Vector2 v);             // Returns length of a vector
 
 int main()
 {
+    // Remove previous log file if exist
     remove("debug.txt");
     
     // Initialization
     //--------------------------------------------------------------------------------------
-    InitWindow(screenSize.x, screenSize.y, "fnode 0.0.1");
+    InitWindow(screenSize.x, screenSize.y, "fnode 0.1");
     InitFNode();
     
     // Initialize values
@@ -141,14 +147,16 @@ int main()
             DrawRectangleRec((Rectangle){ menuSize.x, menuSize.y, screenSize.x - menuSize.x, screenSize.y }, DARKGRAY);
             
             // Draw interface elements
-            if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Value")) CreateNodeValue(2.0f);
-            if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING), screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector 2")) CreateNodeVector2((Vector2){ 4.0f, 1.0f });
-            if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*2, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector 3")) CreateNodeVector3((Vector3){ 0.0f, 0.0f, 0.0f });
-            if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*3, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Color")) CreateNodeColor((Color){ 0.0f, 0.0f, 0.0f, 0.0f });
+            if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Value")) CreateNodeValue((float)GetRandomValue(0, 10));
+            if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING), screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector 2")) CreateNodeVector2((Vector2){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
+            if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*2, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector 3")) CreateNodeVector3((Vector3){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
+            if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*3, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Color")) CreateNodeColor((Color){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
             if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*4, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Add")) CreateNodeAdd();
             if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*5, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Subtract")) CreateNodeSubtract();
             if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*6, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Multiply")) CreateNodeMultiply();
             if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*7, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Divide")) CreateNodeDivide();
+            if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*8, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Append")) CreateNodeAppend();
+            if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*9, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "One Minus")) CreateNodeOneMinus();
             
         EndDrawing();
         //----------------------------------------------------------------------------------
@@ -267,35 +275,54 @@ void UpdateMouseInputs()
             {
                 for (int i = 0; i < nodesCount; i++)
                 {
-                    if (CheckCollisionPointRec(mousePosition, nodes[i]->inputShape) && (nodes[i]->id != tempLine->from) && (nodes[i]->inputsCount < MAX_INPUTS))
+                    if (CheckCollisionPointRec(mousePosition, nodes[i]->inputShape) && (nodes[i]->id != tempLine->from) && (nodes[i]->inputsCount < nodes[i]->inputsLimit))
                     {
-                        if ((nodes[i]->inputsCount == 0) || (nodes[i]->output.valuesCount == nodes[tempLine->from]->output.valuesCount))
+                        // Get which index has the first input node id from current nude
+                        int indexFrom = -1;
+                        for (int k = 0; k < nodesCount; k++)
                         {
-                            // Check if there is already a line created with same linking ids
-                            for (int k = 0; k < linesCount; k++)
+                            if (nodes[k]->id == tempLine->from)
                             {
-                                if ((lines[k]->to == nodes[i]->id) && (lines[k]->from == tempLine->from))
-                                {
-                                    DestroyNodeLine(lines[k]);
-                                    break;
-                                }
+                                indexFrom = k;
+                                break;
                             }
-                            
-                            // Save temporal line values and destroy it
-                            int from = tempLine->from;
-                            int to = nodes[i]->id;
-                            DestroyNodeLine(tempLine);
-                            
-                            // Create final node line
-                            FLine temp = CreateNodeLine(from);
-                            temp->to = to;
-                            
-                            // Reset linking state values
-                            lineState = 0;
-                            CalculateValues();
-                            break;
                         }
-                        else TraceLog(2, "FNode: error trying to link node ID %i (length: %i) with node ID %i (length: %i)", nodes[i]->id, nodes[i]->output.valuesCount, nodes[tempLine->from]->id, nodes[tempLine->from]->output.valuesCount);
+                        
+                        if (indexFrom != -1)
+                        {
+                            bool valuesCheck = true;
+                            if (nodes[i]->type == FNODE_APPEND) valuesCheck = (nodes[i]->output.valuesCount + nodes[indexFrom]->output.valuesCount <= MAX_VALUES);
+                            else valuesCheck = (nodes[i]->output.valuesCount == nodes[indexFrom]->output.valuesCount);
+                            
+                            if ((nodes[i]->inputsCount == 0) || valuesCheck)
+                            {
+                                // Check if there is already a line created with same linking ids
+                                for (int k = 0; k < linesCount; k++)
+                                {
+                                    if ((lines[k]->to == nodes[i]->id) && (lines[k]->from == tempLine->from))
+                                    {
+                                        DestroyNodeLine(lines[k]);
+                                        break;
+                                    }
+                                }
+                                
+                                // Save temporal line values and destroy it
+                                int from = tempLine->from;
+                                int to = nodes[i]->id;
+                                DestroyNodeLine(tempLine);
+                                
+                                // Create final node line
+                                FLine temp = CreateNodeLine(from);
+                                temp->to = to;
+                                
+                                // Reset linking state values
+                                lineState = 0;
+                                CalculateValues();
+                                break;
+                            }
+                            else TraceLog(2, "FNode: error trying to link node ID %i (length: %i) with node ID %i (length: %i)", nodes[i]->id, nodes[i]->output.valuesCount, nodes[indexFrom]->id, nodes[indexFrom]->output.valuesCount);
+                        }
+                        else TraceLog(2, "FNode: error trying to get inputs from node id %i due to index is out of bounds %i\n", nodes[i]->id, indexFrom);
                     }
                 }
             }
@@ -317,7 +344,7 @@ void CalculateValues()
         if (nodes[i] != NULL)
         {            
             // Reset node inputs values and inputs count
-            for (int k = 0; k < MAX_VALUES; k++) nodes[i]->inputs[k] = -1;
+            for (int k = 0; k < MAX_INPUTS; k++) nodes[i]->inputs[k] = -1;
             nodes[i]->inputsCount = 0;
             
             // Search for node inputs and calculate inputs count
@@ -335,7 +362,7 @@ void CalculateValues()
             }
             
             // Check if current node is an operator
-            if (nodes[i]->type > FNODE_COLOR)
+            if (nodes[i]->type > FNODE_COLOR && nodes[i]->type < FNODE_APPEND)
             {
                 // Calculate output values count based on first input node value count
                 if (nodes[i]->inputsCount > 0) 
@@ -368,6 +395,7 @@ void CalculateValues()
                         
                         if (inputIndex != -1)
                         {
+                            // Apply inputs values to output based on node operation type
                             switch (nodes[i]->type)
                             {
                                 case FNODE_ADD:
@@ -396,6 +424,76 @@ void CalculateValues()
                 {
                     for (int k = 0; k < MAX_VALUES; k++) nodes[i]->output.values[k] = 0.0f;
                     nodes[i]->output.valuesCount = 0;
+                }
+            }
+            else
+            {
+                switch (nodes[i]->type)
+                {
+                    case FNODE_APPEND:
+                    {
+                        if (nodes[i]->inputsCount > 0)
+                        {
+                            int valuesCount = 0;
+                            for (int k = 0; k < nodes[i]->inputsCount; k++)
+                            {
+                                int inputIndex = -1;
+                                for (int j = 0; j < nodesCount; j++)
+                                {
+                                    if (nodes[j]->id == nodes[i]->inputs[k])
+                                    {
+                                        inputIndex = j;
+                                        break;
+                                    }
+                                }
+                                
+                                if (inputIndex != -1)
+                                {
+                                    for (int j = 0; j < nodes[inputIndex]->output.valuesCount; j++)
+                                    {
+                                        nodes[i]->output.values[valuesCount] = nodes[inputIndex]->output.values[j];
+                                        valuesCount++;
+                                    }
+                                }
+                                else TraceLog(2, "FNode: error trying to get inputs from node id %i due to index is out of bounds %i\n", nodes[i]->id, inputIndex);
+                            }
+                            
+                            nodes[i]->output.valuesCount = valuesCount;
+                        }
+                        else
+                        {
+                            for (int k = 0; k < MAX_VALUES; k++) nodes[i]->output.values[k] = 0.0f;
+                            nodes[i]->output.valuesCount = 0;
+                        }
+                    } break;
+                    case FNODE_ONEMINUS:
+                    {
+                        if (nodes[i]->inputsCount > 0)
+                        {
+                            int index = -1;
+                            for (int j = 0; j < nodesCount; j++)
+                            {
+                                if (nodes[j]->id == nodes[i]->inputs[0])
+                                {
+                                    index = j;
+                                    break;
+                                }
+                            }
+                            
+                            if (index != -1)
+                            {
+                                nodes[i]->output = nodes[index]->output;
+                                for (int j = 0; j < nodes[i]->output.valuesCount; j++) nodes[i]->output.values[j] = 1 - nodes[i]->output.values[j];
+                            }
+                            else TraceLog(2, "FNode: error trying to get inputs from node id %i due to index is out of bounds %i\n", nodes[i]->id, index);
+                        }
+                        else
+                        {
+                            for (int k = 0; k < MAX_VALUES; k++) nodes[i]->output.values[k] = 0.0f;
+                            nodes[i]->output.valuesCount = 0;
+                        }
+                    } break;
+                    default: break;
                 }
             }
         }
@@ -439,7 +537,8 @@ FNode CreateNodeValue(float value)
     newNode->output.valuesCount = 1;
     newNode->output.values[0] = value;
     newNode->shape = (Rectangle){ GetRandomValue(0, screenSize.x*0.85f - 50*newNode->output.valuesCount), GetRandomValue(screenSize.y/2 - 20 - 100, screenSize.y/2 - 20 + 100), 20 + 50*newNode->output.valuesCount, 40 };
-
+    newNode->inputsLimit = 0;
+    
     UpdateRectangles();
     
     return newNode;
@@ -456,7 +555,8 @@ FNode CreateNodeVector2(Vector2 vector)
     newNode->output.values[0] = vector.x;
     newNode->output.values[1] = vector.y;
     newNode->shape = (Rectangle){ screenSize.x/2 - 50, screenSize.y/2 - 20 , 20 + 50*newNode->output.valuesCount, 40 };
-
+    newNode->inputsLimit = 0;
+    
     UpdateRectangles();
 }
 
@@ -472,7 +572,8 @@ FNode CreateNodeVector3(Vector3 vector)
     newNode->output.values[1] = vector.y;
     newNode->output.values[2] = vector.z;
     newNode->shape = (Rectangle){ screenSize.x/2 - 50, screenSize.y/2 - 20 , 20 + 50*newNode->output.valuesCount, 40 };
-
+    newNode->inputsLimit = 0;
+    
     UpdateRectangles();
 }
 
@@ -489,7 +590,8 @@ FNode CreateNodeColor(Color color)
     newNode->output.values[2] = color.b;
     newNode->output.values[3] = color.a;
     newNode->shape = (Rectangle){ screenSize.x/2 - 50, screenSize.y/2 - 20 , 20 + 50*newNode->output.valuesCount, 40 };
-
+    newNode->inputsLimit = 0;
+    
     UpdateRectangles();
 }
 
@@ -501,7 +603,7 @@ FNode CreateNodeAdd()
     newNode->type = FNODE_ADD;
     newNode->name = "Add";
     newNode->shape = (Rectangle){ screenSize.x/2 - 50, screenSize.y/2 - 20 , 20 + 50*newNode->output.valuesCount, 40 };
-    
+
     UpdateRectangles();
     
     return newNode;
@@ -549,6 +651,35 @@ FNode CreateNodeDivide()
     return newNode;
 }
 
+// Creates a append node in center of screen to combine little data types into bigger data types (2 int = 1 Vector2)
+FNode CreateNodeAppend()
+{
+    FNode newNode = InitializeNode();
+    
+    newNode->type = FNODE_APPEND;
+    newNode->name = "Append";
+    newNode->shape = (Rectangle){ screenSize.x/2 - 50, screenSize.y/2 - 20 , 20 + 50*newNode->output.valuesCount, 40 };
+    
+    UpdateRectangles();
+    
+    return newNode;
+}
+
+// Creates a one minus node in center of screen to subtract a value to 1
+FNode CreateNodeOneMinus()
+{
+    FNode newNode = InitializeNode();
+    
+    newNode->type = FNODE_ONEMINUS;
+    newNode->name = "One Minus";
+    newNode->shape = (Rectangle){ screenSize.x/2 - 50, screenSize.y/2 - 20 , 20 + 50*newNode->output.valuesCount, 40 };
+    newNode->inputsLimit = 1;
+    
+    UpdateRectangles();
+    
+    return newNode;
+}
+
 // Initializes a new node with generic parameters
 FNode InitializeNode()
 {
@@ -585,6 +716,7 @@ FNode InitializeNode()
     // Initialize node inputs and inputs count
     for (int i = 0; i < MAX_INPUTS; i++) newNode->inputs[i] = -1;
     newNode->inputsCount = 0;
+    newNode->inputsLimit = MAX_INPUTS;
     
     // Initialize node output and output values count
     for (int i = 0; i < MAX_VALUES; i++) newNode->output.values[i] = 0.0f;
