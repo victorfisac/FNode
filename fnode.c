@@ -1,31 +1,36 @@
 /*
----- TODO LIST ----
-    - Change node debug info text drawing position
-    - Add comments system
+    ---------- TODO LIST ----------
     - Add value change feature
+    - Fix multiply and divide values calculation for different values count nodes inputs
 */
 
 #include <stdlib.h>         // Required for: malloc(), free()
+#include <stdio.h>          // Required for: fprintf()
 #include <math.h>           // Required for: cos(), sin(), sqrt(), pow(), floor()
+#include <stdarg.h>         // Required for: va_list, va_start(), vfprintf(), va_end()
 #include "raylib.h"         // Required for window management, 2D camera drawing and inputs detection
 
-#define RAYGUI_IMPLEMENTATION
-#include "raygui.h"
-
 // Defines
-#define     MAX_INPUTS          8           // Max number of inputs in every node
-#define     MAX_VALUES          4           // Max number of values in every output
-#define     MAX_NODES           256         // Max number of nodes
-#define     MAX_LINES           1024        // Max number of lines
-#define     UI_PADDING          5           // Interface bounds padding with background
-#define     UI_BUTTON_HEIGHT    30          // Interface bounds height
-#define     UI_SCROLL           10          // Interface scroll sensitivity
-#define     UI_GRID_SPACING     25          // Interface canvas background grid divisions length
-#define     UI_GRID_ALPHA       0.25f       // Interface canvas background grid lines alpha
-#define     UI_GRID_COUNT       500         // Interface canvas background grid divisions count
+#define     MAX_INPUTS                  8               // Max number of inputs in every node
+#define     MAX_VALUES                  4               // Max number of values in every output
+#define     MAX_NODES                   256             // Max number of nodes
+#define     MAX_LINES                   1024            // Max number of lines
+#define     MAX_COMMENTS                64              // Max number of comments
+#define     MAX_COMMENT_LENGTH          20              // Max comment value text length
+#define     UI_PADDING                  5               // Interface bounds padding with background
+#define     UI_BUTTON_HEIGHT            30              // Interface bounds height
+#define     UI_SCROLL                   10              // Interface scroll sensitivity
+#define     UI_GRID_SPACING             25              // Interface canvas background grid divisions length
+#define     UI_GRID_ALPHA               0.25f           // Interface canvas background grid lines alpha
+#define     UI_GRID_COUNT               500             // Interface canvas background grid divisions count
+#define     UI_COMMENT_WIDTH            220             // Interface comment text box width
+#define     UI_COMMENT_HEIGHT           25              // Interface comment text box height
+
+#define     UI_BUTTON_DEFAULT_COLOR     LIGHTGRAY       // Interface button background color     
+#define     UI_BORDER_DEFAULT_COLOR     125             // Interface button border color     
 
 // Enums
-typedef enum FNodeType {
+typedef enum {
     FNODE_VALUE,
     FNODE_VECTOR2,
     FNODE_VECTOR3,
@@ -58,6 +63,13 @@ typedef enum FNodeType {
     FNODE_NOISEINT
 } FNodeType;
 
+typedef enum {
+    BUTTON_DEFAULT,
+    BUTTON_HOVER,
+    BUTTON_PRESSED,
+    BUTTON_CLICKED
+} ButtonState;
+
 // Structs
 typedef struct FNodeValue {
     float values[MAX_VALUES];               // Output values array (float, Vector2, Vector3 or Vector4)
@@ -83,11 +95,20 @@ typedef struct FNodeLine {
     unsigned int to;                        // Id from line end node
 } FNodeLine, *FLine;
 
-typedef struct FComment {
+typedef struct FCommentData {
     unsigned int id;                        // Comment unique identifier
     char *value;                            // Comment text label value
-    Rectangle shape;                        // Comment label rectangle data
-} FComment;
+    Rectangle shape;                        // Comment rectangle data
+    Rectangle valueShape;                   // Comment label rectangle data 
+    Rectangle sizeTShape;                   // Comment top size edit rectangle data
+    Rectangle sizeBShape;                   // Comment bottom size edit rectangle data
+    Rectangle sizeLShape;                   // Comment left size edit rectangle data
+    Rectangle sizeRShape;                   // Comment right size edit rectangle data
+    Rectangle sizeTlShape;                  // Comment top-left size edit rectangle data
+    Rectangle sizeTrShape;                  // Comment top-right size edit rectangle data
+    Rectangle sizeBlShape;                  // Comment bottom-right size edit rectangle data
+    Rectangle sizeBrShape;                  // Comment bottom-right size edit rectangle data
+} FCommentData, *FComment;
 
 typedef struct Vector4 {
     float x;
@@ -101,12 +122,22 @@ int usedMemory = 0;                         // Total USED RAM from memory alloca
 
 int nodesCount;                             // Created nodes count
 FNode nodes[MAX_NODES];                     // Nodes pointers pool
-int selectedId = -1;                        // Current selected node to drag in screen
+int selectedNode = -1;                      // Current selected node to drag in canvas
+int editNode = -1;                          // Current edited node value
 
 int linesCount;                             // Created lines count
 FLine lines[MAX_LINES];                     // Lines pointers pool
 int lineState = 0;                          // Current line linking state (0 = waiting for output to link, 1 = output selected, waiting for input to link)
 FLine tempLine = NULL;                      // Temporally created line during line states
+
+int commentsCount;                          // Created comments count
+FComment comments[MAX_COMMENTS];            // Comments pointers pool
+int commentState = 0;                       // Current comment creation state (0 = waiting to create, 1 = waiting to finish creation)
+int selectedComment = -1;                   // Current selected comment to drag in canvas
+int editSize = -1;                          // Current edited comment
+int editSizeType = -1;                      // Current edited comment size (0 = top, 1 = bottom, 2 = left, 3 = right, 4 = top-left, 5 = top-right, 6 = bottom-left, 7 = bottom-right)
+int editComment = -1;                       // Current edited comment value
+FComment tempComment = NULL;                // Temporally created comment during comment states
 
 Vector2 screenSize = { 1280, 720 };         // Window screen width      
 Vector2 mousePosition = { 0, 0 };           // Current mouse position 
@@ -121,10 +152,16 @@ float menuScroll = 0.0f;                    // Current interface scrolling amoun
 Vector2 scrollLimits = { 0, 335 };          // Interface scrolling limits
 
 // Functions declarations
-void UpdateMouseInputs();                   // Updates mouse inputs to drag, link nodes and canvas camera movement
+void UpdateMouseData();                     // Updates current mouse position and delta position
+void UpdateCanvas();                        // Updates canvas space target and offset
+void UpdateScroll();                        // Updates mouse scrolling for menu and canvas drag
+void UpdateNodeLink();                      // Check node link input
+void UpdateCommentCreationEdit();           // Check comment creation and shape edit input
+void UpdateNodeDrag();                      // Check node drag input
+void UpdateCommentDrag();                   // Check comment drag input
+void UpdateCommentEdit();                   // Check comment text edit input
 void UpdateValues();                        // Updates nodes output values based on current inputs
 void CalculateValues();                     // Calculates nodes output values based on current inputs
-void UpdateRectangles();                    // Updates node shapes due to drag behaviour
 void AlignNode(FNode node);                 // Aligns a node to the nearest grid intersection
 void AlignAllNodes();                       // Aligns all created nodes
 void ClearUnusedNodes();                    // Destroys all unused nodes
@@ -169,16 +206,24 @@ FNode CreateNodeMax();                          // Creates a node to calculate t
 FNode CreateNodeMin();                          // Creates a node to calculate the lower value of all inputs values
 FNode CreateNodeNoise();                        // Creates a node to calculate random values between input range
 FNode CreateNodeNoiseInt();                     // Creates a node to calculate integer random values between input range
+FNode InitializeNode(bool isOperator);          // Initializes a new node with generic parameters
 FLine CreateNodeLine();                         // Creates a line between two nodes
+FComment CreateComment();                       // Creates a comment
 
-FNode InitializeNode();                         // Initializes a new node with generic parameters
+void UpdateNodeShapes(FNode node);              // Updates a node shapes due to drag behaviour
+void UpdateCommentShapes(FComment comment);     // Updates a comment shapes due to drag behaviour
 
 void DrawNode(FNode node);                      // Draws a previously created node
 void DrawNodeLine(FLine line);                  // Draws a previously created node line
+void DrawComment(FComment comment);             // Draws a previously created comment
+bool FButton(Rectangle bounds, const char *text);   // Button element, returns true when pressed
 
 void DestroyNode(FNode node);                   // Destroys a node and its linked lines
 void DestroyNodeLine(FLine line);               // Destroys a node line
+void DestroyComment(FComment comment);          // Destroys a comment
+
 void CloseFNode();                              // Unitializes FNode global variables
+void TraceLogFNode(bool error, const char *text, ...);   // Outputs a trace log message
 
 // Math functions declarations
 float FVector2Length(Vector2 v);                    // Returns length of a Vector2
@@ -193,13 +238,12 @@ float FClamp(float value, float min, float max);    // Returns a value clamped b
 float FTrunc(float value);                          // Returns a truncated value of a value
 float FRound(float value);                          // Returns a rounded value of a value
 float FCeil(float value);                           // Returns a rounded up to the nearest integer of a value
-void FLog(bool error, const char *text, ...);       // Outputs a trace log message
 
 int main()
 {    
     // Initialization
     //--------------------------------------------------------------------------------------
-    // SetConfigFlags(FLAG_MSAA_4X_HINT);
+    SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(screenSize.x, screenSize.y, "fnode 0.2");
     SetTargetFPS(60);
     
@@ -215,7 +259,14 @@ int main()
     {
         // Update
         //----------------------------------------------------------------------------------
-        UpdateMouseInputs();
+        UpdateMouseData();
+        UpdateCanvas();
+        UpdateScroll();
+        UpdateNodeLink();
+        UpdateCommentCreationEdit();
+        UpdateNodeDrag();
+        UpdateCommentDrag();
+        UpdateCommentEdit();
         
         if (IsKeyPressed('P')) debugMode = !debugMode;
         //----------------------------------------------------------------------------------
@@ -229,6 +280,18 @@ int main()
             DrawCanvas();
             
             DrawInterface();
+
+            const char *string = 
+            "selectedNode: %i\n"
+            "editNode: %i\n"
+            "lineState: %i\n"
+            "commentState: %i\n"
+            "selectedComment: %i\n"
+            "editSize: %i\n"
+            "editSizeType: %i\n"
+            "editComment: %i";
+            
+            DrawText(FormatText(string, selectedNode, editNode, lineState, commentState, selectedComment, editSize, editSizeType, editComment), 10, 10, 20, BLACK);
             
         EndDrawing();
         //----------------------------------------------------------------------------------
@@ -243,19 +306,27 @@ int main()
     return 0;
 }
 
-// Updates mouse inputs to drag, link nodes and canvas camera movement
-void UpdateMouseInputs()
+// Updates current mouse position and delta position
+void UpdateMouseData()
 {
     // Update mouse position values
     lastMousePosition = mousePosition;
     mousePosition = GetMousePosition();
     mouseDelta = (Vector2){ mousePosition.x - lastMousePosition.x, mousePosition.y - lastMousePosition.y };
-    
+}
+
+// Updates canvas space target and offset
+void UpdateCanvas()
+{
     // Update canvas camera values
     camera.target = mousePosition;
     camera.offset.x += mouseDelta.x*(camera.zoom - 1);
     camera.offset.y += mouseDelta.y*(camera.zoom - 1);
-    
+}
+
+// Updates mouse scrolling for menu and canvas drag
+void UpdateScroll()
+{
     // Check zoom input
     if (GetMouseWheelMove() != 0)
     {
@@ -270,63 +341,12 @@ void UpdateMouseInputs()
             menuScroll = FClamp(menuScroll, scrollLimits.x, scrollLimits.y);
         }
     }
-    
-    // Check node drag input
-    if ((selectedId == -1) && (lineState == 0))
-    {
-        if (IsMouseButtonDown(MOUSE_LEFT_BUTTON))
-        {
-            for (int i = 0; i < nodesCount; i++)
-            {
-                if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->shape, camera)))
-                {
-                    selectedId = nodes[i]->id;
-                    currentOffset = (Vector2){ mousePosition.x - nodes[i]->shape.x, mousePosition.y - nodes[i]->shape.y };
-                    break;
-                }
-            }
-            
-            if ((selectedId == -1) && (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x, screenSize.y })))
-            {
-                camera.offset.x += mouseDelta.x;
-                camera.offset.y += mouseDelta.y;
-            }
-        }
-        else if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON))
-        {
-            for (int i = 0; i < nodesCount; i++)
-            {
-                if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->shape, camera)))
-                {
-                    DestroyNode(nodes[i]);
-                    CalculateValues();
-                    break;
-                }
-            }
-        }
-    }
-    else
-    {
-        for (int i = 0; i < nodesCount; i++)
-        {
-            if (nodes[i]->id == selectedId)
-            {
-                nodes[i]->shape.x = mousePosition.x - currentOffset.x;
-                nodes[i]->shape.y = mousePosition.y - currentOffset.y;
-                
-                // Check aligned drag movement input
-                if (IsKeyDown(KEY_LEFT_ALT)) AlignNode(nodes[i]);
-                
-                UpdateRectangles();
-                break;
-            }
-        }
-        
-        if (IsMouseButtonUp(MOUSE_LEFT_BUTTON)) selectedId = -1;
-    }
-    
-    // Check node link input
-    if (selectedId == -1)
+}
+
+// Check node link input
+void UpdateNodeLink()
+{
+    if ((selectedNode == -1) && (commentState == 0) && (selectedComment == -1)) 
     {
         switch (lineState)
         {
@@ -334,7 +354,7 @@ void UpdateMouseInputs()
             {
                 if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
                 {
-                    for (int i = 0; i < nodesCount; i++)
+                    for (int i = nodesCount - 1; i >= 0; i--)
                     {
                         if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->outputShape, camera)))
                         {
@@ -344,9 +364,9 @@ void UpdateMouseInputs()
                         }
                     }
                 }
-                else if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON))
+                else if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON) && !IsKeyDown(KEY_LEFT_ALT))
                 {
-                    for (int i = 0; i < nodesCount; i++)
+                    for (int i = nodesCount - 1; i >= 0; i--)
                     {
                         if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->outputShape, camera)))
                         {
@@ -356,6 +376,7 @@ void UpdateMouseInputs()
                             }
                             
                             CalculateValues();
+                            break;
                         }
                         else if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->inputShape, camera)))
                         {
@@ -365,6 +386,7 @@ void UpdateMouseInputs()
                             }
                             
                             CalculateValues();
+                            break;
                         }
                     }
                 }
@@ -423,9 +445,9 @@ void UpdateMouseInputs()
                                     CalculateValues();
                                     break;
                                 }
-                                else FLog(false, "error trying to link node ID %i (length: %i) with node ID %i (length: %i)", nodes[i]->id, nodes[i]->output.valuesCount, nodes[indexFrom]->id, nodes[indexFrom]->output.valuesCount);
+                                else TraceLogFNode(false, "error trying to link node ID %i (length: %i) with node ID %i (length: %i)", nodes[i]->id, nodes[i]->output.valuesCount, nodes[indexFrom]->id, nodes[indexFrom]->output.valuesCount);
                             }
-                            else FLog(false, "error trying to get inputs from node id %i due to index is out of bounds %i", nodes[i]->id, indexFrom);
+                            else TraceLogFNode(false, "error trying to get inputs from node id %i due to index is out of bounds %i", nodes[i]->id, indexFrom);
                         }
                     }
                 }
@@ -436,6 +458,334 @@ void UpdateMouseInputs()
                 }
             } break;
             default: break;
+        }
+    }
+}
+
+// Check comment creation input
+void UpdateCommentCreationEdit()
+{
+    if ((selectedNode == -1) && (lineState == 0) && (selectedComment == -1)) 
+    {
+        switch (commentState)
+        {
+            case 0:
+            {
+                if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+                {
+                    for (int i = 0; i < commentsCount; i++)
+                    {
+                        if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->sizeTShape, camera)))
+                        {
+                            editSize = comments[i]->id;
+                            commentState = 1;
+                            editSizeType = 0;
+                            break;
+                        }
+                        else if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->sizeBShape, camera)))
+                        {
+                            editSize = comments[i]->id;
+                            commentState = 1;
+                            editSizeType = 1;
+                            break;
+                        }
+                        else if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->sizeLShape, camera)))
+                        {
+                            editSize = comments[i]->id;
+                            commentState = 1;
+                            editSizeType = 2;
+                            break;
+                        }
+                        else if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->sizeRShape, camera)))
+                        {
+                            editSize = comments[i]->id;
+                            commentState = 1;
+                            editSizeType = 3;
+                            break;
+                        }
+                        else if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->sizeTlShape, camera)))
+                        {
+                            editSize = comments[i]->id;
+                            commentState = 1;
+                            editSizeType = 4;
+                            break;
+                        }
+                        else if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->sizeTrShape, camera)))
+                        {
+                            editSize = comments[i]->id;
+                            commentState = 1;
+                            editSizeType = 5;
+                            break;
+                        }
+                        else if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->sizeBlShape, camera)))
+                        {
+                            editSize = comments[i]->id;
+                            commentState = 1;
+                            editSizeType = 6;
+                            break;
+                        }
+                        else if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->sizeBrShape, camera)))
+                        {
+                            editSize = comments[i]->id;
+                            commentState = 1;
+                            editSizeType = 7;
+                            break;
+                        }
+                    }
+                }
+                else if (IsMouseButtonDown(MOUSE_LEFT_BUTTON) && IsKeyDown(KEY_LEFT_ALT))
+                {
+                    tempComment = CreateComment();
+                    tempComment->shape.x = mousePosition.x - camera.offset.x;
+                    tempComment->shape.y = mousePosition.y - camera.offset.y;
+                    
+                    UpdateCommentShapes(tempComment);
+                    
+                    commentState = 1;
+                }
+            } break;
+            case 1:
+            {
+                if (editSize != -1)
+                {
+                    for (int i = 0; i < commentsCount; i++)
+                    {
+                        if (comments[i]->id == editSize)
+                        {
+                            switch (editSizeType)
+                            {
+                                case 0:
+                                {
+                                    comments[i]->shape.y += mouseDelta.y;
+                                    comments[i]->shape.height -= mouseDelta.y;
+                                } break;
+                                case 1: comments[i]->shape.height += mouseDelta.y; break;
+                                case 2:
+                                {
+                                    comments[i]->shape.x += mouseDelta.x;
+                                    comments[i]->shape.width -= mouseDelta.x;
+                                } break;
+                                case 3: comments[i]->shape.width += mouseDelta.x; break;
+                                case 4:
+                                {
+                                    comments[i]->shape.x += mouseDelta.x;
+                                    comments[i]->shape.width -= mouseDelta.x;
+                                    comments[i]->shape.y += mouseDelta.y;
+                                    comments[i]->shape.height -= mouseDelta.y;
+                                } break;
+                                case 5:
+                                {
+                                    comments[i]->shape.width += mouseDelta.x;
+                                    comments[i]->shape.y += mouseDelta.y;
+                                    comments[i]->shape.height -= mouseDelta.y;
+                                } break;
+                                case 6:
+                                {
+                                    comments[i]->shape.x += mouseDelta.x;
+                                    comments[i]->shape.width -= mouseDelta.x;
+                                    comments[i]->shape.height += mouseDelta.y;
+                                } break;
+                                case 7:
+                                {
+                                    comments[i]->shape.width += mouseDelta.x;
+                                    comments[i]->shape.height += mouseDelta.y;
+                                } break;
+                                default: break;
+                            }
+                            
+                            UpdateCommentShapes(comments[i]);
+                            break;
+                        }
+                    }
+                    
+                    if (IsMouseButtonUp(MOUSE_LEFT_BUTTON))
+                    {
+                        editSize = -1;
+                        commentState = 0;
+                    }
+                }
+                else
+                {
+                    tempComment->shape.width = mousePosition.x - tempComment->shape.x - camera.offset.x;
+                    tempComment->shape.height = mousePosition.y - tempComment->shape.y - camera.offset.y;
+                    UpdateCommentShapes(tempComment);
+                    
+                    if (IsMouseButtonUp(MOUSE_LEFT_BUTTON))
+                    {
+                        // Save temporal comment values
+                        Rectangle tempRec = { tempComment->shape.x, tempComment->shape.y, tempComment->shape.width, tempComment->shape.height };
+                        DestroyComment(tempComment);
+                        
+                        if (tempRec.width > 0 && tempRec.height > 0)
+                        {
+                            // Create final comment
+                            FComment temp = CreateComment();
+                            temp->shape = tempRec;
+                            
+                            UpdateCommentShapes(temp);
+                        }
+                        else TraceLogFNode(false, "comment have not been created because its width or height are has a negative value");
+                        
+                        // Reset comment state
+                        commentState = 0;
+                    }
+                }
+            } break;
+            default: break;
+        }
+    }
+}
+
+// Check node drag input
+void UpdateNodeDrag()
+{
+    if ((selectedNode == -1) && (lineState == 0) && (commentState == 0) && (selectedComment == -1))
+    {
+        if (IsMouseButtonDown(MOUSE_LEFT_BUTTON))
+        {
+            for (int i = nodesCount - 1; i >= 0; i--)
+            {
+                if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->shape, camera)))
+                {
+                    selectedNode = nodes[i]->id;
+                    currentOffset = (Vector2){ mousePosition.x - nodes[i]->shape.x, mousePosition.y - nodes[i]->shape.y };
+                    break;
+                }
+            }
+            
+            if ((selectedNode == -1) && (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x, screenSize.y })))
+            {
+                camera.offset.x += mouseDelta.x;
+                camera.offset.y += mouseDelta.y;
+            }
+        }
+        else if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON))
+        {
+            for (int i = nodesCount - 1; i >= 0; i--)
+            {
+                if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->shape, camera)))
+                {
+                    DestroyNode(nodes[i]);
+                    CalculateValues();
+                    break;
+                }
+            }
+        }
+    }
+    else if ((selectedNode != -1) && (lineState == 0) && (commentState == 0) && (selectedComment == -1))
+    {
+        for (int i = 0; i < nodesCount; i++)
+        {
+            if (nodes[i]->id == selectedNode)
+            {
+                nodes[i]->shape.x = mousePosition.x - currentOffset.x;
+                nodes[i]->shape.y = mousePosition.y - currentOffset.y;
+                
+                // Check aligned drag movement input
+                if (IsKeyDown(KEY_LEFT_ALT)) AlignNode(nodes[i]);
+                
+                UpdateNodeShapes(nodes[i]);
+                break;
+            }
+        }
+        
+        if (IsMouseButtonUp(MOUSE_LEFT_BUTTON)) selectedNode = -1;
+    }
+}
+
+// Check comment drag input
+void UpdateCommentDrag()
+{
+    if ((selectedComment == -1) && (lineState == 0) && (commentState == 0) && (selectedNode == -1))
+    {
+        if (!IsKeyDown(KEY_LEFT_ALT))
+        {
+            if (IsMouseButtonDown(MOUSE_LEFT_BUTTON))
+            {
+                for (int i = commentsCount - 1; i >= 0; i--)
+                {
+                    if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->shape, camera)))
+                    {
+                        selectedComment = comments[i]->id;
+                        currentOffset = (Vector2){ mousePosition.x - comments[i]->shape.x, mousePosition.y - comments[i]->shape.y };
+                        break;
+                    }
+                }
+            }
+            
+        }
+        else if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON))
+        {
+            for (int i = commentsCount - 1; i >= 0; i--)
+            {
+                if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->shape, camera)))
+                {
+                    DestroyComment(comments[i]);
+                    break;
+                }
+            }
+        }
+    }
+    else if ((selectedComment != -1) && (lineState == 0) && (commentState == 0) && (selectedNode == -1))
+    {
+        for (int i = 0; i < commentsCount; i++)
+        {
+            if (comments[i]->id == selectedComment)
+            {
+                comments[i]->shape.x = mousePosition.x - currentOffset.x;
+                comments[i]->shape.y = mousePosition.y - currentOffset.y;
+                
+                UpdateCommentShapes(comments[i]);
+                
+                // TODO: find a solution to move nodes that are in comment shape
+                break;
+            }
+        }
+        
+        if (IsMouseButtonUp(MOUSE_LEFT_BUTTON)) selectedComment = -1;
+    }
+}
+
+// Check comment text edit input
+void UpdateCommentEdit()
+{
+    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+    {
+        if ((editComment == -1) && (selectedNode == -1) && (lineState == 0) && (commentState == 0) && (selectedComment == -1) && (editSize == -1) && (editSizeType == -1))
+        {
+            for (int i = 0; i < commentsCount; i++)
+            {
+                if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->valueShape, camera)))
+                {
+                    editComment = i;
+                    break;
+                }
+            }
+        }
+        else if ((editComment != -1) && (selectedNode == -1) && (lineState == 0) && (commentState == 0) && (selectedComment == -1) && (editSize == -1) && (editSizeType == -1))
+        {
+            bool isCurrentText = false;
+            int currentEdit = editComment;
+            for (int i = 0; i < commentsCount; i++)
+            {
+                if (comments[i]->id == editComment)
+                {
+                    if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->valueShape, camera)))
+                    {
+                        isCurrentText = true;
+                        break;
+                    }
+                }
+                
+                if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->valueShape, camera)))
+                {
+                    editComment = i;
+                    break;
+                }
+            }
+            
+            // Reset current editing text any other text label is pressed
+            if (!isCurrentText && (currentEdit == editComment)) editComment = -1;
         }
     }
 }
@@ -483,7 +833,7 @@ void CalculateValues()
                     }
                     
                     if (index != -1) nodes[i]->output = nodes[index]->output;
-                    else FLog(false, "error trying to get inputs from node id %i due to index is out of bounds %i", nodes[i]->id, index);
+                    else TraceLogFNode(false, "error trying to get inputs from node id %i due to index is out of bounds %i", nodes[i]->id, index);
                     
                     for (int k = 1; k < nodes[i]->inputsCount; k++)
                     {
@@ -521,7 +871,7 @@ void CalculateValues()
                                 default: break;
                             }
                         }
-                        else FLog(false, "error trying to get node id %i due to index is out of bounds %i", nodes[i]->inputs[k], inputIndex);
+                        else TraceLogFNode(false, "error trying to get node id %i due to index is out of bounds %i", nodes[i]->inputs[k], inputIndex);
                     }
                 }
                 else
@@ -555,7 +905,7 @@ void CalculateValues()
                                 valuesCount++;
                             }
                         }
-                        else FLog(false, "error trying to get inputs from node id %i due to index is out of bounds %i", nodes[i]->id, inputIndex);
+                        else TraceLogFNode(false, "error trying to get inputs from node id %i due to index is out of bounds %i", nodes[i]->id, inputIndex);
                     }
                     
                     nodes[i]->output.valuesCount = valuesCount;
@@ -694,9 +1044,9 @@ void CalculateValues()
                                     {
                                         for (int j = 0; j < nodes[i]->output.valuesCount; j++) nodes[i]->output.values[j] = FPower(nodes[i]->output.values[j], nodes[expIndex]->output.values[0]);
                                     }
-                                    else FLog(false, "values count of node %i should be 1 because it is an exponent (currently count: %i)", nodes[expIndex]->id, nodes[expIndex]->output.valuesCount);
+                                    else TraceLogFNode(false, "values count of node %i should be 1 because it is an exponent (currently count: %i)", nodes[expIndex]->id, nodes[expIndex]->output.valuesCount);
                                 }
-                                else FLog(false, "error trying to get inputs from node id %i due to index is out of bounds %i", nodes[i]->id, expIndex);
+                                else TraceLogFNode(false, "error trying to get inputs from node id %i due to index is out of bounds %i", nodes[i]->id, expIndex);
                             } break;
                             case FNODE_POSTERIZE:
                             {
@@ -716,9 +1066,9 @@ void CalculateValues()
                                     {
                                         for (int j = 0; j < nodes[i]->output.valuesCount; j++) nodes[i]->output.values[j] = FPosterize(nodes[i]->output.values[j], nodes[expIndex]->output.values[0]);
                                     }
-                                    else FLog(false, "values count of node %i should be 1 because it is an exponent (currently count: %i)", nodes[expIndex]->id, nodes[expIndex]->output.valuesCount);
+                                    else TraceLogFNode(false, "values count of node %i should be 1 because it is an exponent (currently count: %i)", nodes[expIndex]->id, nodes[expIndex]->output.valuesCount);
                                 }
-                                else FLog(false, "error trying to get inputs from node id %i due to index is out of bounds %i", nodes[i]->id, expIndex);
+                                else TraceLogFNode(false, "error trying to get inputs from node id %i due to index is out of bounds %i", nodes[i]->id, expIndex);
                             } break;
                             case FNODE_MAX:
                             case FNODE_MIN:
@@ -743,7 +1093,7 @@ void CalculateValues()
                                             else if ((nodes[inputIndex]->output.values[k] < nodes[i]->output.values[k]) && (nodes[i]->type == FNODE_MIN)) nodes[i]->output.values[k] = nodes[inputIndex]->output.values[k];
                                         }
                                     }
-                                    else FLog(false, "error trying to get inputs from node id %i due to index is out of bounds %i", nodes[i]->id, inputIndex);
+                                    else TraceLogFNode(false, "error trying to get inputs from node id %i due to index is out of bounds %i", nodes[i]->id, inputIndex);
                                 }
                             }
                             case FNODE_NOISE:
@@ -757,7 +1107,7 @@ void CalculateValues()
                             default: break;
                         }
                     }
-                    else FLog(false, "error trying to get inputs from node id %i due to index is out of bounds %i", nodes[i]->id, index);
+                    else TraceLogFNode(false, "error trying to get inputs from node id %i due to index is out of bounds %i", nodes[i]->id, index);
                 }
                 else
                 {
@@ -765,44 +1115,68 @@ void CalculateValues()
                     nodes[i]->output.valuesCount = 0;
                 }
             }
+            
+            UpdateNodeShapes(nodes[i]);
         }
-        else FLog(true, "error trying to calculate values for a null referenced node");
+        else TraceLogFNode(true, "error trying to calculate values for a null referenced node");
     }
-    
-    UpdateRectangles();
 }
 
-// Updates node shapes due to drag behaviour
-void UpdateRectangles()
+// Updates a node shapes due to drag behaviour
+void UpdateNodeShapes(FNode node)
 {
-    for (int i = 0; i < nodesCount; i++)
+    if (node != NULL)
     {
-        if (nodes[i]->type < FNODE_ADD) nodes[i]->outputShape = (Rectangle){ nodes[i]->shape.x + nodes[i]->shape.width, nodes[i]->shape.y + nodes[i]->shape.height/2 - 10, 20, 20 };
+        if (node->type < FNODE_ADD)
+        {
+            node->outputShape.x = node->shape.x + node->shape.width;
+            node->outputShape.y = node->shape.y + node->shape.height/2 - 10;
+        }
         else
         {
-            nodes[i]->shape = (Rectangle){ nodes[i]->shape.x, nodes[i]->shape.y , 20 + 50*nodes[i]->output.valuesCount, 40 };
-            nodes[i]->inputShape = (Rectangle){ nodes[i]->shape.x - 20, nodes[i]->shape.y + nodes[i]->shape.height/2 - 10, 20, 20 };
-            nodes[i]->outputShape = (Rectangle){ nodes[i]->shape.x + nodes[i]->shape.width, nodes[i]->shape.y + nodes[i]->shape.height/2 - 10, 20, 20 };
+            node->shape = (Rectangle){ node->shape.x, node->shape.y , 20 + 50*node->output.valuesCount, 40 };
+            node->inputShape.x = node->shape.x - 20;
+            node->inputShape.y = node->shape.y + node->shape.height/2 - 10;
+            node->outputShape.x = node->shape.x + node->shape.width;
+            node->outputShape.y = node->shape.y + node->shape.height/2 - 10;
         }
     }
+    else TraceLogFNode(true, "error trying to calculate values for a null referenced node");
 }
 
-// Draw canvas space to create nodes
-void DrawCanvas()
+// Updates a comment shapes due to drag behaviour
+void UpdateCommentShapes(FComment comment)
 {
-    // Draw background title and credits
-    DrawText("FNODE 1.0", (canvasSize.x - MeasureText("FNODE 1.0", 120))/2, canvasSize.y/2 - 60, 120, Fade(LIGHTGRAY, UI_GRID_ALPHA*2));
-    DrawText("VICTOR FISAC", (canvasSize.x - MeasureText("VICTOR FISAC", 40))/2, canvasSize.y*0.65f - 20, 40, Fade(LIGHTGRAY, UI_GRID_ALPHA*2));
-    
-    Begin2dMode(camera);
-    
-        DrawCanvasGrid(UI_GRID_COUNT);
+    if (comment != NULL)
+    {
+        comment->valueShape.x = comment->shape.x + 10;
+        comment->valueShape.y = comment->shape.y - UI_COMMENT_HEIGHT - 5;
         
-        // Draw all created nodes and lines
-        for (int i = 0; i < nodesCount; i++) DrawNode(nodes[i]);
-        for (int i = 0; i < linesCount; i++) DrawNodeLine(lines[i]);
+        comment->sizeTShape.x = comment->shape.x + comment->shape.width/2 - comment->sizeTShape.width/2;
+        comment->sizeTShape.y = comment->shape.y - comment->sizeTShape.height/2;
         
-    End2dMode();
+        comment->sizeBShape.x = comment->shape.x + comment->shape.width/2 - comment->sizeBShape.width/2;
+        comment->sizeBShape.y = comment->shape.y + comment->shape.height - comment->sizeBShape.height/2;
+        
+        comment->sizeLShape.x = comment->shape.x - comment->sizeLShape.width/2;
+        comment->sizeLShape.y = comment->shape.y + comment->shape.height/2 - comment->sizeLShape.height/2;
+        
+        comment->sizeRShape.x = comment->shape.x + comment->shape.width - comment->sizeRShape.width/2;
+        comment->sizeRShape.y = comment->shape.y + comment->shape.height/2 - comment->sizeRShape.height/2;
+        
+        comment->sizeTlShape.x = comment->shape.x - comment->sizeTlShape.width/2;
+        comment->sizeTlShape.y = comment->shape.y - comment->sizeTlShape.height/2;
+        
+        comment->sizeTrShape.x = comment->shape.x + comment->shape.width - comment->sizeTrShape.width/2;
+        comment->sizeTrShape.y = comment->shape.y - comment->sizeTrShape.height/2;
+        
+        comment->sizeBlShape.x = comment->shape.x - comment->sizeBlShape.width/2;
+        comment->sizeBlShape.y = comment->shape.y + comment->shape.height - comment->sizeBlShape.height/2;
+        
+        comment->sizeBrShape.x = comment->shape.x + comment->shape.width - comment->sizeBrShape.width/2;
+        comment->sizeBrShape.y = comment->shape.y + comment->shape.height - comment->sizeBrShape.height/2;
+    }
+    else TraceLogFNode(true, "error trying to calculate values for a null referenced comment");
 }
 
 // Aligns a node to the nearest grid intersection
@@ -851,9 +1225,12 @@ void AlignNode(FNode node)
 void AlignAllNodes()
 {
     // Align all created nodes
-    for (int i = 0; i < nodesCount; i++) AlignNode(nodes[i]);
+    for (int i = 0; i < nodesCount; i++)
+    {
+        AlignNode(nodes[i]);
     
-    UpdateRectangles();
+        UpdateNodeShapes(nodes[i]);
+    }
 }
 
 // Destroys all unused nodes
@@ -863,19 +1240,19 @@ void ClearUnusedNodes()
     {
         bool used = false;
         
-        for(int k = 0; k < linesCount; k++)
+        for (int k = 0; k < linesCount; k++)
         {
-            if(nodes[i]->id == lines[k]->from || nodes[i]->id == lines[k]->to)
+            if (nodes[i]->id == lines[k]->from || nodes[i]->id == lines[k]->to)
             {
                 used = true;
                 break;
             }
         }
         
-        if(!used) DestroyNode(nodes[i]);
+        if (!used) DestroyNode(nodes[i]);
     }
     
-    FLog(false, "all unused nodes have been deleted [USED RAM: %i bytes]", usedMemory);
+    TraceLogFNode(false, "all unused nodes have been deleted [USED RAM: %i bytes]", usedMemory);
 }
 
 // Destroys all created nodes and its linked lines
@@ -883,8 +1260,27 @@ void ClearGraph()
 {
     for (int i = nodesCount - 1; i >= 0; i--) DestroyNode(nodes[i]);
     
-    if(usedMemory != 0) FLog(true, "all nodes have been deleted by there are still memory in use [USED RAM: %i bytes]", usedMemory);
-    else FLog(false, "all nodes have been deleted [USED RAM: %i bytes]", usedMemory);
+    if (usedMemory != 0) TraceLogFNode(true, "all nodes have been deleted by there are still memory in use [USED RAM: %i bytes]", usedMemory);
+    else TraceLogFNode(false, "all nodes have been deleted [USED RAM: %i bytes]", usedMemory);
+}
+
+// Draw canvas space to create nodes
+void DrawCanvas()
+{
+    // Draw background title and credits
+    DrawText("FNODE 1.0", (canvasSize.x - MeasureText("FNODE 1.0", 120))/2, canvasSize.y/2 - 60, 120, Fade(LIGHTGRAY, UI_GRID_ALPHA*2));
+    DrawText("VICTOR FISAC", (canvasSize.x - MeasureText("VICTOR FISAC", 40))/2, canvasSize.y*0.65f - 20, 40, Fade(LIGHTGRAY, UI_GRID_ALPHA*2));
+    
+    Begin2dMode(camera);
+    
+        DrawCanvasGrid(UI_GRID_COUNT);
+        
+        // Draw all created comments, lines and nodes
+        for (int i = 0; i < commentsCount; i++) DrawComment(comments[i]);
+        for (int i = 0; i < nodesCount; i++) DrawNode(nodes[i]);
+        for (int i = 0; i < linesCount; i++) DrawNodeLine(lines[i]);
+        
+    End2dMode();
 }
 
 // Draw canvas grid with a specific number of divisions for horizontal and vertical lines
@@ -928,41 +1324,41 @@ void DrawInterface()
     DrawRectangleRec((Rectangle){ canvasSize.x, 0.0f, screenSize.x - canvasSize.x, screenSize.y }, DARKGRAY);
     
     // Draw interface main buttons
-    if (GuiButton((Rectangle){ UI_PADDING, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Clear Graph")) ClearGraph();
-    if (GuiButton((Rectangle){ UI_PADDING + ((screenSize.x - canvasSize.x - UI_PADDING*2)/2 + UI_PADDING)*1, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Align Nodes")) AlignAllNodes();
-    if (GuiButton((Rectangle){ UI_PADDING + ((screenSize.x - canvasSize.x - UI_PADDING*2)/2 + UI_PADDING)*2, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Clear Unused Nodes")) ClearUnusedNodes();
+    if (FButton((Rectangle){ UI_PADDING, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Clear Graph")) ClearGraph();
+    if (FButton((Rectangle){ UI_PADDING + ((screenSize.x - canvasSize.x - UI_PADDING*2)/2 + UI_PADDING)*1, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Align Nodes")) AlignAllNodes();
+    if (FButton((Rectangle){ UI_PADDING + ((screenSize.x - canvasSize.x - UI_PADDING*2)/2 + UI_PADDING)*2, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Clear Unused Nodes")) ClearUnusedNodes();
     
     // Draw interface nodes buttons
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Value")) CreateNodeValue((float)GetRandomValue(-10, 10) + (float)GetRandomValue(0, 100)/100);
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*1 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector 2")) CreateNodeVector2((Vector2){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*2 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector 3")) CreateNodeVector3((Vector3){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*3 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector 4")) CreateNodeVector4((Vector4){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*4 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Add")) CreateNodeAdd();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*5 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Subtract")) CreateNodeSubtract();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*6 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Multiply")) CreateNodeMultiply();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*7 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Divide")) CreateNodeDivide();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*8 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Append")) CreateNodeAppend();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*9 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "One Minus")) CreateNodeOneMinus();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*10 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Exp 2")) CreateNodeExp2();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*11 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Power")) CreateNodePower();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*12 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Posterize")) CreateNodePosterize();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*13 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Abs")) CreateNodeAbs();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*14 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Clamp 0-1")) CreateNodeClamp01();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*15 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Max")) CreateNodeMax();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*16 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Min")) CreateNodeMin();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*17 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Negate")) CreateNodeNegate();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*18 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Noise")) CreateNodeNoise();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*19 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Noise Int")) CreateNodeNoiseInt();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*20 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Reciprocal")) CreateNodeReciprocal();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*21 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Ceil")) CreateNodeCeil();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*22 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Cosine")) CreateNodeCos();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*23 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Sine")) CreateNodeSin();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*24 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Tangent")) CreateNodeTan();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*25 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Deg to Rad")) CreateNodeDeg2Rad();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*26 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Rad to Deg")) CreateNodeRad2Deg();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*27 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Normalize")) CreateNodeNormalize();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*28 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Round")) CreateNodeRound();
-    if (GuiButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*29 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Trunc")) CreateNodeTrunc();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Value")) CreateNodeValue((float)GetRandomValue(-10, 10) /*+ (float)GetRandomValue(0, 100)/100*/);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*1 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector 2")) CreateNodeVector2((Vector2){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*2 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector 3")) CreateNodeVector3((Vector3){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*3 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector 4")) CreateNodeVector4((Vector4){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*4 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Add")) CreateNodeAdd();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*5 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Subtract")) CreateNodeSubtract();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*6 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Multiply")) CreateNodeMultiply();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*7 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Divide")) CreateNodeDivide();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*8 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Append")) CreateNodeAppend();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*9 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "One Minus")) CreateNodeOneMinus();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*10 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Exp 2")) CreateNodeExp2();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*11 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Power")) CreateNodePower();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*12 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Posterize")) CreateNodePosterize();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*13 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Abs")) CreateNodeAbs();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*14 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Clamp 0-1")) CreateNodeClamp01();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*15 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Max")) CreateNodeMax();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*16 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Min")) CreateNodeMin();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*17 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Negate")) CreateNodeNegate();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*18 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Noise")) CreateNodeNoise();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*19 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Noise Int")) CreateNodeNoiseInt();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*20 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Reciprocal")) CreateNodeReciprocal();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*21 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Ceil")) CreateNodeCeil();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*22 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Cosine")) CreateNodeCos();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*23 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Sine")) CreateNodeSin();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*24 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Tangent")) CreateNodeTan();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*25 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Deg to Rad")) CreateNodeDeg2Rad();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*26 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Rad to Deg")) CreateNodeRad2Deg();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*27 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Normalize")) CreateNodeNormalize();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*28 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Round")) CreateNodeRound();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*29 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Trunc")) CreateNodeTrunc();
 }
 
 // Converts Vector2 coordinates from world space to Camera2D space based on its offset
@@ -982,14 +1378,15 @@ void InitFNode()
 {
     nodesCount = 0;
     linesCount = 0;
+    commentsCount = 0;
     
-    FLog(false, "initialization complete");
+    TraceLogFNode(false, "initialization complete");
 }
 
 // Creates a value node (1 float)
 FNode CreateNodeValue(float value)
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(false);
     
     newNode->type = FNODE_VALUE;
     newNode->name = "Value";
@@ -998,7 +1395,7 @@ FNode CreateNodeValue(float value)
     newNode->shape.width += 50*newNode->output.valuesCount;
     newNode->inputsLimit = 0;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1006,7 +1403,7 @@ FNode CreateNodeValue(float value)
 // Creates a Vector2 node (2 float)
 FNode CreateNodeVector2(Vector2 vector)
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(false);
     
     newNode->type = FNODE_VECTOR2;
     newNode->name = "Vector 2";
@@ -1016,13 +1413,13 @@ FNode CreateNodeVector2(Vector2 vector)
     newNode->shape.width += 50*newNode->output.valuesCount;
     newNode->inputsLimit = 0;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
 }
 
 // Creates a Vector3 node (3 float)
 FNode CreateNodeVector3(Vector3 vector)
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(false);
     
     newNode->type = FNODE_VECTOR3;
     newNode->name = "Vector 3";
@@ -1033,13 +1430,13 @@ FNode CreateNodeVector3(Vector3 vector)
     newNode->shape.width += 50*newNode->output.valuesCount;
     newNode->inputsLimit = 0;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
 }
 
 // Creates a Vector4 node (4 float)
 FNode CreateNodeVector4(Vector4 vector)
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(false);
     
     newNode->type = FNODE_VECTOR4;
     newNode->name = "Vector 4";
@@ -1051,18 +1448,18 @@ FNode CreateNodeVector4(Vector4 vector)
     newNode->shape.width += 50*newNode->output.valuesCount;
     newNode->inputsLimit = 0;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
 }
 
 // Creates a node to add multiples values
 FNode CreateNodeAdd()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_ADD;
     newNode->name = "Add";
 
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1070,12 +1467,12 @@ FNode CreateNodeAdd()
 // Creates a node to subtract multiples values by the first linked
 FNode CreateNodeSubtract()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_SUBTRACT;
     newNode->name = "Subtract";
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1083,12 +1480,12 @@ FNode CreateNodeSubtract()
 // Creates a node to multiply different values
 FNode CreateNodeMultiply()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_MULTIPLY;
     newNode->name = "Multiply";
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1096,12 +1493,12 @@ FNode CreateNodeMultiply()
 // Creates a node to divide multiples values by the first linked
 FNode CreateNodeDivide()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_DIVIDE;
     newNode->name = "Divide";
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1109,12 +1506,12 @@ FNode CreateNodeDivide()
 // Creates a node to combine little data types into bigger data types (2 int = 1 Vector2)
 FNode CreateNodeAppend()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_APPEND;
     newNode->name = "Append";
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1122,13 +1519,13 @@ FNode CreateNodeAppend()
 // Creates a node to subtract a value to 1
 FNode CreateNodeOneMinus()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_ONEMINUS;
     newNode->name = "One Minus";
     newNode->inputsLimit = 1;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1136,13 +1533,13 @@ FNode CreateNodeOneMinus()
 // Creates a node to get absolute value of the input
 FNode CreateNodeAbs()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_ABS;
     newNode->name = "Abs";
     newNode->inputsLimit = 1;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1150,13 +1547,13 @@ FNode CreateNodeAbs()
 // Creates a node to get sin value of the input
 FNode CreateNodeCos()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_COS;
     newNode->name = "Cosine";
     newNode->inputsLimit = 1;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1164,13 +1561,13 @@ FNode CreateNodeCos()
 // Creates a node to get sin value of the input
 FNode CreateNodeSin()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_SIN;
     newNode->name = "Sine";
     newNode->inputsLimit = 1;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1178,13 +1575,13 @@ FNode CreateNodeSin()
 // Creates a node to get sin value of the input
 FNode CreateNodeTan()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_TAN;
     newNode->name = "Tangent";
     newNode->inputsLimit = 1;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1192,13 +1589,13 @@ FNode CreateNodeTan()
 // Creates a node to convert a degrees value to radians
 FNode CreateNodeDeg2Rad()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_DEG2RAD;
     newNode->name = "Deg to Rad";
     newNode->inputsLimit = 1;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1206,13 +1603,13 @@ FNode CreateNodeDeg2Rad()
 // Creates a node to convert a radians value to degrees                  
 FNode CreateNodeRad2Deg()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_RAD2DEG;
     newNode->name = "Rad to Deg";
     newNode->inputsLimit = 1;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1220,13 +1617,13 @@ FNode CreateNodeRad2Deg()
 // Creates a node to normalize a vector
 FNode CreateNodeNormalize()
 {
-   FNode newNode = InitializeNode();
+   FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_NORMALIZE;
     newNode->name = "Normalize";
     newNode->inputsLimit = 1;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }                    
@@ -1234,13 +1631,13 @@ FNode CreateNodeNormalize()
 // Creates a node to get negative value of the input
 FNode CreateNodeNegate()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_NEGATE;
     newNode->name = "Negate";
     newNode->inputsLimit = 1;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1248,13 +1645,13 @@ FNode CreateNodeNegate()
 // Creates a node to get 1/input value
 FNode CreateNodeReciprocal()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_RECIPROCAL;
     newNode->name = "Reciprocal";
     newNode->inputsLimit = 1;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1262,13 +1659,13 @@ FNode CreateNodeReciprocal()
 // Creates a node to get the truncated value of the input
 FNode CreateNodeTrunc()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_TRUNC;
     newNode->name = "Truncate";
     newNode->inputsLimit = 1;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1276,13 +1673,13 @@ FNode CreateNodeTrunc()
 // Creates a node to get the rounded value of the input
 FNode CreateNodeRound()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_ROUND;
     newNode->name = "Round";
     newNode->inputsLimit = 1;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1290,13 +1687,13 @@ FNode CreateNodeRound()
 // Creates a node to get the rounded up to the nearest integer of the input
 FNode CreateNodeCeil()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_CEIL;
     newNode->name = "Ceil";
     newNode->inputsLimit = 1;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1304,13 +1701,13 @@ FNode CreateNodeCeil()
 // Creates a node to clamp the input value between 0-1 range
 FNode CreateNodeClamp01()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_CLAMP01;
     newNode->name = "Clamp 0-1";
     newNode->inputsLimit = 1;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1318,13 +1715,13 @@ FNode CreateNodeClamp01()
 // Creates a node that returns 2 to the power of its input
 FNode CreateNodeExp2()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_EXP2;
     newNode->name = "Exp 2";
     newNode->inputsLimit = 1;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1332,13 +1729,13 @@ FNode CreateNodeExp2()
 // Creates a node that returns the first input to the power of the second input
 FNode CreateNodePower()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_POWER;
     newNode->name = "Power";
     newNode->inputsLimit = 2;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1346,13 +1743,13 @@ FNode CreateNodePower()
 // Creates a node that posterizes the first input in a number of steps set by second input
 FNode CreateNodePosterize()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_POSTERIZE;
     newNode->name = "Posterize";
     newNode->inputsLimit = 2;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1360,12 +1757,12 @@ FNode CreateNodePosterize()
 // Creates a node to calculate the higher value of all inputs values
 FNode CreateNodeMax()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_MAX;
     newNode->name = "Max";
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1373,12 +1770,12 @@ FNode CreateNodeMax()
 // Creates a node to calculate the lower value of all inputs values
 FNode CreateNodeMin()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_MIN;
     newNode->name = "Min";
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1386,13 +1783,13 @@ FNode CreateNodeMin()
 // Creates a node to calculate random values between input range
 FNode CreateNodeNoise()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_NOISE;
     newNode->name = "Noise";
     newNode->inputsLimit = 1;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
@@ -1400,19 +1797,19 @@ FNode CreateNodeNoise()
 // Creates a node to calculate integer random values between input range
 FNode CreateNodeNoiseInt()
 {
-    FNode newNode = InitializeNode();
+    FNode newNode = InitializeNode(true);
     
     newNode->type = FNODE_NOISEINT;
     newNode->name = "Noise Int";
     newNode->inputsLimit = 1;
     
-    UpdateRectangles();
+    UpdateNodeShapes(newNode);
     
     return newNode;
 }
 
 // Initializes a new node with generic parameters
-FNode InitializeNode()
+FNode InitializeNode(bool isOperator)
 {
     FNode newNode = (FNode)malloc(sizeof(FNodeData));
     usedMemory += sizeof(FNodeData);
@@ -1442,7 +1839,7 @@ FNode InitializeNode()
     
     // Initialize node id
     if (id != -1) newNode->id = id;
-    else FLog(true, "node creation failed because there is any available id");
+    else TraceLogFNode(true, "node creation failed because there is any available id");
     
     // Initialize node inputs and inputs count
     for (int i = 0; i < MAX_INPUTS; i++) newNode->inputs[i] = -1;
@@ -1455,15 +1852,16 @@ FNode InitializeNode()
     
     // Initialize shapes
     newNode->shape = (Rectangle){ GetRandomValue(-camera.offset.x + 0, -camera.offset.x + screenSize.x*0.85f - 50*4), GetRandomValue(-camera.offset.y + screenSize.y/2 - 20 - 100, camera.offset.y + screenSize.y/2 - 20 + 100), 20, 40 };
-    newNode->inputShape = (Rectangle){ 0, 0, 0, 0 };
-    newNode->outputShape = (Rectangle){ 0, 0, 0, 0 };
+    if (isOperator) newNode->inputShape = (Rectangle){ 0, 0, 20, 20 };
+    else newNode->inputShape = (Rectangle){ 0, 0, 0, 0 };
+    newNode->outputShape = (Rectangle){ 0, 0, 20, 20 };
     
     AlignNode(newNode);
     
     nodes[nodesCount] = newNode;
     nodesCount++;
     
-    FLog(false, "created new node id %i (index: %i) [USED RAM: %i bytes]", newNode->id, (nodesCount - 1), usedMemory);
+    TraceLogFNode(false, "created new node id %i (index: %i) [USED RAM: %i bytes]", newNode->id, (nodesCount - 1), usedMemory);
     
     return newNode;
 }
@@ -1499,7 +1897,7 @@ FLine CreateNodeLine(int from)
     
     // Initialize line id
     if (id != -1) newLine->id = id;
-    else FLog(true, "line creation failed because there is any available id");
+    else TraceLogFNode(true, "line creation failed because there is any available id");
     
     // Initialize line input
     newLine->from = from;
@@ -1508,9 +1906,77 @@ FLine CreateNodeLine(int from)
     lines[linesCount] = newLine;
     linesCount++;
     
-    FLog(false, "created new line id %i (index: %i) [USED RAM: %i bytes]", newLine->id, (linesCount - 1), usedMemory);
+    TraceLogFNode(false, "created new line id %i (index: %i) [USED RAM: %i bytes]", newLine->id, (linesCount - 1), usedMemory);
     
     return newLine;
+}
+
+// Creates a comment
+FComment CreateComment()
+{
+    FComment newComment = (FComment)malloc(sizeof(FCommentData));
+    usedMemory += sizeof(FCommentData);
+    
+    int id = -1;
+    for (int i = 0; i < MAX_COMMENTS; i++)
+    {
+        int currentId = i;
+        
+        // Check if current id already exist in other comment
+        for (int k = 0; k < commentsCount; k++)
+        {
+            if (comments[k]->id == currentId)
+            {
+                currentId++;
+                break;
+            }
+        }
+        
+        // If not exist, set it as new comment id
+        if (currentId == i)
+        {
+            id = i;
+            break;
+        }
+    }
+    
+    // Initialize comment id
+    if (id != -1) newComment->id = id;
+    else TraceLogFNode(true, "comment creation failed because there is any available id");
+    
+    // Initialize comment input
+    newComment->value = (char *)malloc(MAX_COMMENT_LENGTH);
+    usedMemory += sizeof(MAX_COMMENT_LENGTH);
+    for (int i = 0; i < MAX_COMMENT_LENGTH; i++)
+    {
+        if (i == 0) newComment->value[i] = 'C';
+        else if (i == 1) newComment->value[i] = 'h';
+        else if (i == 2) newComment->value[i] = 'a';
+        else if (i == 3) newComment->value[i] = 'n';
+        else if (i == 4) newComment->value[i] = 'g';
+        else if (i == 5) newComment->value[i] = 'e';
+        else if (i == 6) newComment->value[i] = ' ';
+        else if (i == 7) newComment->value[i] = 'm';
+        else if (i == 8) newComment->value[i] = 'e';
+        else newComment->value[i] = '\0';
+    }
+    newComment->shape = (Rectangle){ 0, 0, 0, 0 };
+    newComment->valueShape = (Rectangle){ 0, 0, UI_COMMENT_WIDTH, UI_COMMENT_HEIGHT };
+    newComment->sizeTShape = (Rectangle){ 0, 0, 40, 10 };
+    newComment->sizeBShape = (Rectangle){ 0, 0, 40, 10 };
+    newComment->sizeLShape = (Rectangle){ 0, 0, 10, 40 };
+    newComment->sizeRShape = (Rectangle){ 0, 0, 10, 40 };
+    newComment->sizeTlShape = (Rectangle){ 0, 0, 10, 10 };
+    newComment->sizeTrShape = (Rectangle){ 0, 0, 10, 10 };
+    newComment->sizeBlShape = (Rectangle){ 0, 0, 10, 10 };
+    newComment->sizeBrShape = (Rectangle){ 0, 0, 10, 10 };
+    
+    comments[commentsCount] = newComment;
+    commentsCount++;
+    
+    TraceLogFNode(false, "created new comment id %i (index: %i) [USED RAM: %i bytes]", newComment->id, (commentsCount - 1), usedMemory);
+    
+    return newComment;
 }
 
 // Draws a previously created node
@@ -1518,12 +1984,66 @@ void DrawNode(FNode node)
 {
     if (node != NULL)
     {
-        DrawRectangleRec(node->shape, ((node->id == selectedId) ? GRAY : LIGHTGRAY));
+        DrawRectangleRec(node->shape, ((node->id == selectedNode) ? GRAY : LIGHTGRAY));
         DrawRectangleLines(node->shape.x, node->shape.y, node->shape.width, node->shape.height, BLACK);
         
         // Draw name label
         DrawText(FormatText("%s [ID: %i]", node->name, node->id), node->shape.x + node->shape.width/2 - MeasureText(FormatText("%s [ID: %i]", node->name, node->id), 10)/2, node->shape.y - 15, 10, BLACK);
         
+        // FText()
+        
+        if (node->type <= FNODE_VECTOR4)
+        {
+            if (node->id == editNode)
+            {
+                int letter = -1;
+                letter = GetKeyPressed();
+              
+                if (letter != -1)
+                {
+                    if (letter == KEY_BACKSPACE)
+                    {
+                        /*for (int i = 0; i < MAX_NODE_LENGTH; i++)
+                        {
+                            if ((node->value[i] == '\0'))
+                            {
+                                node->value[i - 1] = '\0';
+                                break;
+                            }
+                        }
+                        
+                        node->value[MAX_NODE_LENGTH - 1] = '\0';*/
+                    }
+                    else if (letter == KEY_ENTER) editComment = -1;
+                    else
+                    {
+                        /*if ((letter >= 32) && (letter < 127) && (letter != KEY_SPACE))  // Check for numeric values and dot value
+                        {
+                            for (int i = 0; i < MAX_NODE_LENGTH; i++)
+                            {
+                                if (node->value[i] == '\0')
+                                {
+                                    node->value[i] = (char)letter;
+                                    break;
+                                }
+                            }
+                        }*/
+                    }
+                }
+            }
+
+            /*DrawRectangleLines(node->shape.x + 10, node->shape.y + 5, node->shape.width - 20, node->shape.height - 10, ((editNode == node->id) ? BLACK : GRAY));
+            
+            int initPos = comment->shape.x + 14;
+            for (int i = 0; i < MAX_COMMENT_LENGTH; i++)
+            {
+                if (node->value[i] == '\0') break;
+                
+                DrawText(FormatText("%c", comment->value[i]), initPos, comment->valueShape.y + 2, 20, DARKGRAY);
+                initPos += MeasureText(FormatText("%c", comment->value[i]), 20) + 1;
+            }*/
+        }
+
         switch (node->output.valuesCount)
         {
             case 1: DrawText(FormatText("%.02f", node->output.values[0]), node->shape.x + node->shape.width/2 - MeasureText(FormatText("%.02f", node->output.values[0]), 20)/2, node->shape.y + node->shape.height/2 - 10, 20, BLACK); break;
@@ -1546,15 +2066,17 @@ void DrawNode(FNode node)
             "id: %i\n"
             "type: %i\n"
             "name: %s\n"
-            "inputs: %i, %i, %i, %i, %i, %i, %i, %i (count: %i)\n"
-            "output: %.02f, %.02f, %.02f, %.02f (count: %i)\n"
+            "inputs(%i): %i, %i, %i, %i, %i, %i, %i, %i\n"
+            "output(%i): %.02f, %.02f, %.02f, %.02f\n"
             "shape: %i %i, %i, %i";
             
-            DrawText(FormatText(string, node->id, node->type, node->name, node->inputs[0], node->inputs[1], node->inputs[2], node->inputs[3], node->inputs[4], 
-            node->inputs[5], node->inputs[6], node->inputs[7], node->inputsCount, node->output.values[0], node->output.values[1], node->output.values[2], node->output.values[3], node->output.valuesCount, node->shape.x, node->shape.y, node->shape.width, node->shape.height), 10, 10 + 100*node->id, 10, BLACK);
+            DrawText(FormatText(string, node->id, node->type, node->name, node->inputsCount, node->inputs[0], node->inputs[1], node->inputs[2], 
+            node->inputs[3], node->inputs[4], node->inputs[5], node->inputs[6], node->inputs[7], node->output.valuesCount, node->output.values[0], 
+            node->output.values[1], node->output.values[2], node->output.values[3], node->shape.x, node->shape.y, node->shape.width, 
+            node->shape.height), node->shape.x, node->shape.y + node->shape.height + 5, 10, BLACK);
         }
     }
-    else FLog(true, "error trying to draw a null referenced node");
+    else TraceLogFNode(true, "error trying to draw a null referenced node");
 }
 
 // Draws a previously created node line
@@ -1564,6 +2086,27 @@ void DrawNodeLine(FLine line)
     {
         Vector2 from = { 0, 0 };
         Vector2 to = { 0, 0 };
+        
+        int indexTo = -1;        
+        if (line->to != -1)
+        {
+            for (int i = 0; i < nodesCount; i++)
+            {
+                if (nodes[i]->id == line->to)
+                {
+                    indexTo = i;
+                    break;
+                }
+            }
+            
+            if (indexTo != -1)
+            {
+                to.x = nodes[indexTo]->inputShape.x + nodes[indexTo]->inputShape.width/2;
+                to.y = nodes[indexTo]->inputShape.y + nodes[indexTo]->inputShape.height/2;
+            }
+            else TraceLogFNode(true, "error when trying to find node id %i due to index is out of bounds %i", line->to, indexTo);
+        }
+        else to = CameraToViewVector2(mousePosition, camera);
         
         int indexFrom = -1;
         for (int i = 0; i < nodesCount; i++)
@@ -1579,30 +2122,30 @@ void DrawNodeLine(FLine line)
         {
             from.x = nodes[indexFrom]->outputShape.x + nodes[indexFrom]->outputShape.width/2;
             from.y = nodes[indexFrom]->outputShape.y + nodes[indexFrom]->outputShape.height/2;
-            
-            if (line->to != -1)
-            {
-                int indexTo = -1;
-                for (int i = 0; i < nodesCount; i++)
-                {
-                    if (nodes[i]->id == line->to)
-                    {
-                        indexTo = i;
-                        break;
-                    }
-                }
-                
-                if (indexTo != -1)
-                {
-                    to.x = nodes[indexTo]->inputShape.x + nodes[indexTo]->inputShape.width/2;
-                    to.y = nodes[indexTo]->inputShape.y + nodes[indexTo]->inputShape.height/2;
-                }
-            }
-            else to = CameraToViewVector2(mousePosition, camera);
         }
-        else FLog(true, "error when trying to find node id %i due to index is out of bounds %i", line->from, indexFrom);
+        else TraceLogFNode(true, "error when trying to find node id %i due to index is out of bounds %i", line->from, indexFrom);
         
-        DrawLine(from.x, from.y, to.x, to.y, ((tempLine->id == line->id && tempLine->to == -1) ? GRAY : BLACK));
+        DrawLine(from.x, from.y, to.x, to.y, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
+        DrawCircle(from.x, from.y, 5, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
+        DrawCircle(to.x, to.y, 5, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
+        
+        if (indexFrom != -1 && indexTo != -1)
+        {
+            switch (nodes[indexTo]->type)
+            {
+                case FNODE_POWER:
+                {
+                    if ((nodes[indexTo]->inputsCount > 0) && (nodes[indexTo]->inputs[0] == nodes[indexFrom]->id)) DrawText("Input", from.x + 5, from.y - 30, 10, BLACK);
+                    else if ((nodes[indexTo]->inputsCount > 1) && (nodes[indexTo]->inputs[1] == nodes[indexFrom]->id)) DrawText("Exponent", from.x + 5, from.y - 30, 10, BLACK);
+                } break;
+                case FNODE_POSTERIZE:
+                {
+                    if ((nodes[indexTo]->inputsCount > 0) && (nodes[indexTo]->inputs[0] == nodes[indexFrom]->id)) DrawText("Input", from.x + 5, from.y - 30, 10, BLACK);
+                    else if ((nodes[indexTo]->inputsCount > 1) && (nodes[indexTo]->inputs[1] == nodes[indexFrom]->id)) DrawText("Samples", from.x + 5, from.y - 30, 10, BLACK);
+                } break;
+                default: break;
+            }
+        }
         
         if (debugMode)
         {
@@ -1614,7 +2157,139 @@ void DrawNodeLine(FLine line)
             DrawText(FormatText(string, line->id, line->from, line->to), screenSize.x*0.85f - 10 - 50, 10 + 75*line->id, 10, BLACK);
         }
     }
-    else FLog(true, "error trying to draw a null referenced line");
+    else TraceLogFNode(true, "error trying to draw a null referenced line");
+}
+
+// Draws a previously created comment
+void DrawComment(FComment comment)
+{
+    if (comment != NULL)
+    {
+        if ((commentState == 0) || ((commentState == 1) && (tempComment->id != comment->id)) || ((commentState == 1) && editSize != -1)) DrawRectangleRec(comment->shape, Fade(YELLOW, 0.2f));
+        DrawRectangleLines(comment->shape.x, comment->shape.y, comment->shape.width, comment->shape.height, BLACK);
+        
+        if ((commentState == 0) || ((commentState == 1) && (tempComment->id != comment->id)) || ((commentState == 1) && editSize != -1))
+        {
+            DrawRectangleRec(comment->sizeTShape, ((CheckCollisionPointRec(mousePosition, CameraToViewRec(comment->sizeTShape, camera))) ? LIGHTGRAY : GRAY));
+            DrawRectangleLines(comment->sizeTShape.x, comment->sizeTShape.y, comment->sizeTShape.width, comment->sizeTShape.height, BLACK);
+            DrawRectangleRec(comment->sizeBShape, ((CheckCollisionPointRec(mousePosition, CameraToViewRec(comment->sizeBShape, camera))) ? LIGHTGRAY : GRAY));
+            DrawRectangleLines(comment->sizeBShape.x, comment->sizeBShape.y, comment->sizeBShape.width, comment->sizeBShape.height, BLACK);
+            DrawRectangleRec(comment->sizeLShape, ((CheckCollisionPointRec(mousePosition, CameraToViewRec(comment->sizeLShape, camera))) ? LIGHTGRAY : GRAY));
+            DrawRectangleLines(comment->sizeLShape.x, comment->sizeLShape.y, comment->sizeLShape.width, comment->sizeLShape.height, BLACK);
+            DrawRectangleRec(comment->sizeRShape, ((CheckCollisionPointRec(mousePosition, CameraToViewRec(comment->sizeRShape, camera))) ? LIGHTGRAY : GRAY));
+            DrawRectangleLines(comment->sizeRShape.x, comment->sizeRShape.y, comment->sizeRShape.width, comment->sizeRShape.height, BLACK);
+            DrawRectangleRec(comment->sizeTlShape, ((CheckCollisionPointRec(mousePosition, CameraToViewRec(comment->sizeTlShape, camera))) ? LIGHTGRAY : GRAY));
+            DrawRectangleLines(comment->sizeTlShape.x, comment->sizeTlShape.y, comment->sizeTlShape.width, comment->sizeTlShape.height, BLACK);
+            DrawRectangleRec(comment->sizeTrShape, ((CheckCollisionPointRec(mousePosition, CameraToViewRec(comment->sizeTrShape, camera))) ? LIGHTGRAY : GRAY));
+            DrawRectangleLines(comment->sizeTrShape.x, comment->sizeTrShape.y, comment->sizeTrShape.width, comment->sizeTrShape.height, BLACK);
+            DrawRectangleRec(comment->sizeBlShape, ((CheckCollisionPointRec(mousePosition, CameraToViewRec(comment->sizeBlShape, camera))) ? LIGHTGRAY : GRAY));
+            DrawRectangleLines(comment->sizeBlShape.x, comment->sizeBlShape.y, comment->sizeBlShape.width, comment->sizeBlShape.height, BLACK);
+            DrawRectangleRec(comment->sizeBrShape, ((CheckCollisionPointRec(mousePosition, CameraToViewRec(comment->sizeBrShape, camera))) ? LIGHTGRAY : GRAY));
+            DrawRectangleLines(comment->sizeBrShape.x, comment->sizeBrShape.y, comment->sizeBrShape.width, comment->sizeBrShape.height, BLACK);
+        }
+        
+        if (comment->id == editComment)
+        {
+            int letter = -1;
+            letter = GetKeyPressed();
+          
+            if (letter != -1)
+            {
+                if (letter == KEY_BACKSPACE)
+                {
+                    for (int i = 0; i < MAX_COMMENT_LENGTH; i++)
+                    {
+                        if ((comment->value[i] == '\0'))
+                        {
+                            comment->value[i - 1] = '\0';
+                            break;
+                        }
+                    }
+                    
+                    comment->value[MAX_COMMENT_LENGTH - 1] = '\0';
+                }
+                else if (letter == KEY_ENTER) editComment = -1;
+                else
+                {
+                    if ((letter >= 32) && (letter < 127))
+                    {
+                        for (int i = 0; i < MAX_COMMENT_LENGTH; i++)
+                        {
+                            if (comment->value[i] == '\0')
+                            {
+                                comment->value[i] = (char)letter;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        DrawRectangleLines(comment->valueShape.x, comment->valueShape.y, comment->valueShape.width, comment->valueShape.height, ((editComment == comment->id) ? BLACK : LIGHTGRAY));
+        
+        int initPos = comment->shape.x + 14;
+        for (int i = 0; i < MAX_COMMENT_LENGTH; i++)
+        {
+            if (comment->value[i] == '\0') break;
+            
+            DrawText(FormatText("%c", comment->value[i]), initPos, comment->valueShape.y + 2, 20, DARKGRAY);
+            initPos += MeasureText(FormatText("%c", comment->value[i]), 20) + 1;
+        }
+        
+        if (debugMode)
+        {
+            const char *string =
+            "id: %i\n"
+            "value: %s\n"
+            "shape: %i, %i, %i, %i\n";
+            
+            DrawText(FormatText(string, comment->id, comment->value, comment->shape.x, comment->shape.y, comment->shape.width, comment->shape.height), comment->shape.x, comment->shape.y + comment->shape.height + 5, 10, BLACK);
+        }
+    }
+    else TraceLogFNode(true, "error trying to draw a null referenced line");
+}
+
+// Button element, returns true when pressed
+bool FButton(Rectangle bounds, const char *text)
+{
+    ButtonState buttonState = BUTTON_DEFAULT;
+
+    if (bounds.width < (MeasureText(text, 10) + 20)) bounds.width = MeasureText(text, 10) + 20;
+    if (bounds.height < 10) bounds.height = 10 + 40;
+    
+    if (CheckCollisionPointRec(mousePosition, bounds))
+    {
+        if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) buttonState = BUTTON_PRESSED;
+        else if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) buttonState = BUTTON_CLICKED;
+        else buttonState = BUTTON_HOVER;
+    }
+
+    switch (buttonState)
+    {
+        case BUTTON_DEFAULT:
+        {
+            DrawRectangleRec(bounds, (Color){ UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, 255 });
+            DrawRectangle(bounds.x + 2, bounds.y + 2, bounds.width - 4,bounds.height - 4, UI_BUTTON_DEFAULT_COLOR);
+            DrawText(text, bounds.x + ((bounds.width/2) - (MeasureText(text, 10)/2)), bounds.y + (bounds.height - 10)/2, 10, DARKGRAY);
+        } break;
+        case BUTTON_HOVER:
+        {
+            DrawRectangleRec(bounds, (Color){ UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, 255 });
+            DrawRectangle(bounds.x + 2, bounds.y + 2, bounds.width - 4,bounds.height - 4, UI_BUTTON_DEFAULT_COLOR);
+            DrawRectangleRec(bounds, Fade(WHITE, 0.4f));
+            DrawText(text, bounds.x + ((bounds.width/2) - (MeasureText(text, 10)/2)), bounds.y + (bounds.height - 10)/2, 10, BLACK);
+        } break;
+        case BUTTON_PRESSED:
+        {
+            DrawRectangleRec(bounds, UI_BUTTON_DEFAULT_COLOR);
+            DrawRectangle(bounds.x + 2, bounds.y + 2, bounds.width - 4,bounds.height - 4, GRAY);
+            DrawText(text, bounds.x + ((bounds.width/2) - (MeasureText(text, 10)/2)), bounds.y + (bounds.height - 10)/2, 10, LIGHTGRAY);
+        } break;
+        default: break;
+    }
+    
+    return (buttonState == BUTTON_CLICKED);
 }
 
 // Destroys a node and its linked lines
@@ -1651,13 +2326,13 @@ void DestroyNode(FNode node)
             nodesCount--;
             
             usedMemory -= sizeof(FNodeData);
-            FLog(false, "destroyed node id %i (index: %i) [USED RAM: %i bytes]", id, index, usedMemory);
+            TraceLogFNode(false, "destroyed node id %i (index: %i) [USED RAM: %i bytes]", id, index, usedMemory);
             
             CalculateValues();
         }
-        else FLog(true, "error when trying to destroy node id %i (index: %i)", id, index);
+        else TraceLogFNode(true, "error when trying to destroy node id %i (index: %i)", id, index);
     }
-    else FLog(true, "error trying to destroy a null referenced node");
+    else TraceLogFNode(true, "error trying to destroy a null referenced node");
 }
 
 // Destroys a node line
@@ -1689,13 +2364,50 @@ void DestroyNodeLine(FLine line)
             linesCount--;
             
             usedMemory -= sizeof(FNodeLine);
-            FLog(false, "destroyed line id %i (index: %i) [USED RAM: %i bytes]", id, index, usedMemory);
+            TraceLogFNode(false, "destroyed line id %i (index: %i) [USED RAM: %i bytes]", id, index, usedMemory);
             
             CalculateValues();
         }
-        else FLog(true, "error when trying to destroy line id %i due to index is out of bounds %i", id, index);
+        else TraceLogFNode(true, "error when trying to destroy line id %i due to index is out of bounds %i", id, index);
     }
-    else FLog(true, "error trying to destroy a null referenced line");
+    else TraceLogFNode(true, "error trying to destroy a null referenced line");
+}
+
+// Destroys a comment
+void DestroyComment(FComment comment)
+{
+    if (comment != NULL)
+    {
+        int id = comment->id;
+        int index = -1;
+        
+        for (int i = 0; i < commentsCount; i++)
+        {
+            if (comments[i]->id == id)
+            {
+                index = i;
+                break;
+            }
+        }
+        
+        if (index != -1)
+        {
+            free(comments[index]->value);
+            free(comments[index]);
+            
+            for (int i = index; i < commentsCount; i++)
+            {
+                if ((i + 1) < commentsCount) comments[i] = comments[i + 1];
+            }
+
+            commentsCount--;
+            
+            usedMemory -= (sizeof(FCommentData) + sizeof(MAX_COMMENT_LENGTH));
+            TraceLogFNode(false, "destroyed comment id %i (index: %i) [USED RAM: %i bytes]", id, index, usedMemory);
+        }
+        else TraceLogFNode(true, "error when trying to destroy comment id %i due to index is out of bounds %i", id, index);
+    }
+    else TraceLogFNode(true, "error trying to destroy a null referenced comment");
 }
 
 // Unitializes FNode global variables
@@ -1713,10 +2425,33 @@ void CloseFNode()
         usedMemory -= sizeof(FNodeLine);
     }
     
+    for (int i = 0; i < commentsCount; i++)
+    {
+        free(comments[i]->value);
+        free(comments[i]);
+        usedMemory -= (sizeof(FCommentData) + sizeof(MAX_COMMENT_LENGTH));
+    }
+    
     nodesCount = 0;
     linesCount = 0;
+    commentsCount = 0;
     
-    FLog(false, "unitialization complete [USED RAM: %i bytes]", usedMemory);
+    TraceLogFNode(false, "unitialization complete [USED RAM: %i bytes]", usedMemory);
+}
+
+// Outputs a trace log message
+void TraceLogFNode(bool error, const char *text, ...)
+{
+    va_list args;
+    
+    fprintf(stdout, "FNode: ");
+    va_start(args, text);
+    vfprintf(stdout, text, args);
+    va_end(args);
+
+    fprintf(stdout, "\n");
+
+    if (error) exit(1);
 }
 
 // Returns length of a Vector2
@@ -1761,7 +2496,11 @@ Vector4 FVector4Normalize(Vector4 v)
 // Returns a value to the power of an exponent
 float FPower(float value, float exp)
 {
-    return (float)pow(value, exp);
+    float output = value;
+    
+    for (int i = 1; i < exp; i++) output *= output;
+    
+    return output;
 }
 
 // Returns a value rounded based on the samples
@@ -1820,19 +2559,4 @@ float FCeil(float value)
     if (output != (float)truncated) output = (float)((output >= 0) ? (truncated + 1) : truncated);
 
     return output;
-}
-
-// Outputs a trace log message
-void FLog(bool error, const char *text, ...)
-{
-    va_list args;
-    
-    fprintf(stdout, "FNode: ");
-    va_start(args, text);
-    vfprintf(stdout, text, args);
-    va_end(args);
-
-    fprintf(stdout, "\n");
-
-    if (error) exit(1);
 }
