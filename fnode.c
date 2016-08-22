@@ -67,6 +67,7 @@ Vector2 mouseDelta = { 0, 0 };              // Current frame mouse position incr
 
 int usedMemory = 0;                         // Total USED RAM from memory allocation
 
+bool debugMode = false;                     // Drawing debug information state
 Vector2 menuSize;                           // Interface screen size
 
 // Functions declarations
@@ -122,6 +123,8 @@ int main()
         // Update
         //----------------------------------------------------------------------------------
         UpdateMouseInputs();
+        
+        if (IsKeyPressed('P')) debugMode = !debugMode;
         //----------------------------------------------------------------------------------
 
         // Draw
@@ -139,7 +142,7 @@ int main()
             
             // Draw interface elements
             if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Value")) CreateNodeValue(2.0f);
-            if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING), screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector 2")) CreateNodeVector2((Vector2){ 0.0f, 0.0f });
+            if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING), screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector 2")) CreateNodeVector2((Vector2){ 4.0f, 1.0f });
             if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*2, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector 3")) CreateNodeVector3((Vector3){ 0.0f, 0.0f, 0.0f });
             if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*3, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Color")) CreateNodeColor((Color){ 0.0f, 0.0f, 0.0f, 0.0f });
             if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*4, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Add")) CreateNodeAdd();
@@ -266,29 +269,33 @@ void UpdateMouseInputs()
                 {
                     if (CheckCollisionPointRec(mousePosition, nodes[i]->inputShape) && (nodes[i]->id != tempLine->from) && (nodes[i]->inputsCount < MAX_INPUTS))
                     {
-                        // Check if there is already a line created with same linking ids
-                        for (int k = 0; k < linesCount; k++)
+                        if ((nodes[i]->inputsCount == 0) || (nodes[i]->output.valuesCount == nodes[tempLine->from]->output.valuesCount))
                         {
-                            if ((lines[k]->to == nodes[i]->id) && (lines[k]->from == tempLine->from))
+                            // Check if there is already a line created with same linking ids
+                            for (int k = 0; k < linesCount; k++)
                             {
-                                DestroyNodeLine(lines[k]);
-                                break;
+                                if ((lines[k]->to == nodes[i]->id) && (lines[k]->from == tempLine->from))
+                                {
+                                    DestroyNodeLine(lines[k]);
+                                    break;
+                                }
                             }
+                            
+                            // Save temporal line values and destroy it
+                            int from = tempLine->from;
+                            int to = nodes[i]->id;
+                            DestroyNodeLine(tempLine);
+                            
+                            // Create final node line
+                            FLine temp = CreateNodeLine(from);
+                            temp->to = to;
+                            
+                            // Reset linking state values
+                            lineState = 0;
+                            CalculateValues();
+                            break;
                         }
-                        
-                        // Save temporal line values and destroy it
-                        int from = tempLine->from;
-                        int to = nodes[i]->id;
-                        DestroyNodeLine(tempLine);
-                        
-                        // Create final node line
-                        FLine temp = CreateNodeLine(from);
-                        temp->to = to;
-                        
-                        // Reset linking state values
-                        lineState = 0;
-                        CalculateValues();
-                        break;
+                        else TraceLog(2, "FNode: error trying to link node ID %i (length: %i) with node ID %i (length: %i)", nodes[i]->id, nodes[i]->output.valuesCount, nodes[tempLine->from]->id, nodes[tempLine->from]->output.valuesCount);
                     }
                 }
             }
@@ -305,21 +312,21 @@ void UpdateMouseInputs()
 // Calculates nodes output values based on current inputs
 void CalculateValues()
 {
-    for(int i = 0; i < nodesCount; i++)
+    for (int i = 0; i < nodesCount; i++)
     {
-        if(nodes[i] != NULL)
+        if (nodes[i] != NULL)
         {            
             // Reset node inputs values and inputs count
-            for(int k = 0; k < MAX_VALUES; k++) nodes[i]->inputs[k] = -1;
+            for (int k = 0; k < MAX_VALUES; k++) nodes[i]->inputs[k] = -1;
             nodes[i]->inputsCount = 0;
             
             // Search for node inputs and calculate inputs count
-            for(int k = 0; k < linesCount; k++)
+            for (int k = 0; k < linesCount; k++)
             {
-                if(lines[k] != NULL)
+                if (lines[k] != NULL)
                 {
                     // Check if line output (to) is the node input id
-                    if(lines[k]->to == nodes[i]->id)
+                    if (lines[k]->to == nodes[i]->id)
                     {
                         nodes[i]->inputs[nodes[i]->inputsCount] = lines[k]->from;
                         nodes[i]->inputsCount++;
@@ -328,44 +335,56 @@ void CalculateValues()
             }
             
             // Check if current node is an operator
-            if(nodes[i]->type > FNODE_COLOR)
+            if (nodes[i]->type > FNODE_COLOR)
             {
                 // Calculate output values count based on first input node value count
-                if(nodes[i]->inputsCount > 0) 
+                if (nodes[i]->inputsCount > 0) 
                 {
                     // Get which index has the first input node id from current nude
                     int index = -1;
-                    for(int k = 0; k < nodesCount; k++)
+                    for (int k = 0; k < nodesCount; k++)
                     {
-                        if(nodes[k]->id == nodes[i]->inputs[0])
+                        if (nodes[k]->id == nodes[i]->inputs[0])
                         {
                             index = k;
                             break;
                         }
                     }
                     
-                    if(index != -1) nodes[i]->output = nodes[index]->output;
+                    if (index != -1) nodes[i]->output = nodes[index]->output;
                     else TraceLog(2, "FNode: error trying to get inputs from node id %i due to index is out of bounds %i\n", nodes[i]->id, index);
                     
-                    for(int k = 1; k < nodes[i]->inputsCount; k++)
+                    for (int k = 1; k < nodes[i]->inputsCount; k++)
                     {
                         int inputIndex = -1;
-                        for(int j = 0; j < nodesCount; j++)
+                        for (int j = 0; j < nodesCount; j++)
                         {
-                            if(nodes[j]->id == nodes[i]->inputs[k])
+                            if (nodes[j]->id == nodes[i]->inputs[k])
                             {
                                 inputIndex = j;
                                 break;
                             }
                         }
                         
-                        if(inputIndex != -1)
+                        if (inputIndex != -1)
                         {
-                            switch(nodes[i]->type)
+                            switch (nodes[i]->type)
                             {
                                 case FNODE_ADD:
                                 {
-                                    for(int j = 0; j < nodes[i]->output.valuesCount; j++) nodes[i]->output.values[j] += nodes[inputIndex]->output.values[j];
+                                    for (int j = 0; j < nodes[i]->output.valuesCount; j++) nodes[i]->output.values[j] += nodes[inputIndex]->output.values[j];
+                                } break;
+                                case FNODE_SUBTRACT:
+                                {
+                                    for (int j = 0; j < nodes[i]->output.valuesCount; j++) nodes[i]->output.values[j] -= nodes[inputIndex]->output.values[j];
+                                } break;
+                                case FNODE_MULTIPLY:
+                                {
+                                    for (int j = 0; j < nodes[i]->output.valuesCount; j++) nodes[i]->output.values[j] *= nodes[inputIndex]->output.values[j];
+                                } break;
+                                case FNODE_DIVIDE:
+                                {
+                                    for (int j = 0; j < nodes[i]->output.valuesCount; j++) nodes[i]->output.values[j] /= nodes[inputIndex]->output.values[j];
                                 } break;
                                 default: break;
                             }
@@ -375,7 +394,7 @@ void CalculateValues()
                 }
                 else
                 {
-                    for(int k = 0; k < MAX_VALUES; k++) nodes[i]->output.values[k] = 0.0f;
+                    for (int k = 0; k < MAX_VALUES; k++) nodes[i]->output.values[k] = 0.0f;
                     nodes[i]->output.valuesCount = 0;
                 }
             }
@@ -419,7 +438,7 @@ FNode CreateNodeValue(float value)
     newNode->name = "Value";
     newNode->output.valuesCount = 1;
     newNode->output.values[0] = value;
-    newNode->shape = (Rectangle){ screenSize.x/2 - 50, screenSize.y/2 - 20 , 20 + 50*newNode->output.valuesCount, 40 };
+    newNode->shape = (Rectangle){ GetRandomValue(0, screenSize.x*0.85f - 50*newNode->output.valuesCount), GetRandomValue(screenSize.y/2 - 20 - 100, screenSize.y/2 - 20 + 100), 20 + 50*newNode->output.valuesCount, 40 };
 
     UpdateRectangles();
     
@@ -429,19 +448,49 @@ FNode CreateNodeValue(float value)
 // Creates a Vector2 node in center of screen
 FNode CreateNodeVector2(Vector2 vector)
 {
-    // TODO
+    FNode newNode = InitializeNode();
+    
+    newNode->type = FNODE_VECTOR2;
+    newNode->name = "Vector 2";
+    newNode->output.valuesCount = 2;
+    newNode->output.values[0] = vector.x;
+    newNode->output.values[1] = vector.y;
+    newNode->shape = (Rectangle){ screenSize.x/2 - 50, screenSize.y/2 - 20 , 20 + 50*newNode->output.valuesCount, 40 };
+
+    UpdateRectangles();
 }
 
 // Creates a Vector3 node in center of screen
 FNode CreateNodeVector3(Vector3 vector)
 {
-    // TODO
+    FNode newNode = InitializeNode();
+    
+    newNode->type = FNODE_VECTOR3;
+    newNode->name = "Vector 3";
+    newNode->output.valuesCount = 3;
+    newNode->output.values[0] = vector.x;
+    newNode->output.values[1] = vector.y;
+    newNode->output.values[2] = vector.z;
+    newNode->shape = (Rectangle){ screenSize.x/2 - 50, screenSize.y/2 - 20 , 20 + 50*newNode->output.valuesCount, 40 };
+
+    UpdateRectangles();
 }
 
 // Creates a Color node in center of screen
 FNode CreateNodeColor(Color color)
 {
-    // TODO
+    FNode newNode = InitializeNode();
+    
+    newNode->type = FNODE_COLOR;
+    newNode->name = "Color";
+    newNode->output.valuesCount = 4;
+    newNode->output.values[0] = color.r;
+    newNode->output.values[1] = color.g;
+    newNode->output.values[2] = color.b;
+    newNode->output.values[3] = color.a;
+    newNode->shape = (Rectangle){ screenSize.x/2 - 50, screenSize.y/2 - 20 , 20 + 50*newNode->output.valuesCount, 40 };
+
+    UpdateRectangles();
 }
 
 // Creates an add node in center of screen to add multiples values
@@ -461,19 +510,43 @@ FNode CreateNodeAdd()
 // Creates a subtract node in center of screen to subtract multiples values by the first linked
 FNode CreateNodeSubtract()
 {
-    // TODO
+    FNode newNode = InitializeNode();
+    
+    newNode->type = FNODE_SUBTRACT;
+    newNode->name = "Subtract";
+    newNode->shape = (Rectangle){ screenSize.x/2 - 50, screenSize.y/2 - 20 , 20 + 50*newNode->output.valuesCount, 40 };
+    
+    UpdateRectangles();
+    
+    return newNode;
 }
 
 // Creates a multiply node in center of screen to multiply different values
 FNode CreateNodeMultiply()
 {
-    // TODO
+    FNode newNode = InitializeNode();
+    
+    newNode->type = FNODE_MULTIPLY;
+    newNode->name = "Multiply";
+    newNode->shape = (Rectangle){ screenSize.x/2 - 50, screenSize.y/2 - 20 , 20 + 50*newNode->output.valuesCount, 40 };
+    
+    UpdateRectangles();
+    
+    return newNode;
 }
 
 // Creates a divide node in center of screen to divide multiples values by the first linked
 FNode CreateNodeDivide()
 {
-    // TODO
+    FNode newNode = InitializeNode();
+    
+    newNode->type = FNODE_DIVIDE;
+    newNode->name = "Divide";
+    newNode->shape = (Rectangle){ screenSize.x/2 - 50, screenSize.y/2 - 20 , 20 + 50*newNode->output.valuesCount, 40 };
+    
+    UpdateRectangles();
+    
+    return newNode;
 }
 
 // Initializes a new node with generic parameters
@@ -580,7 +653,7 @@ void DrawNode(FNode node)
 {
     if (node != NULL)
     {
-        DrawRectangleRec(node->shape, LIGHTGRAY);
+        DrawRectangleRec(node->shape, ((node->id == selectedId) ? GRAY : LIGHTGRAY));
         DrawRectangleLines(node->shape.x, node->shape.y, node->shape.width, node->shape.height, BLACK);
         
         // Draw name label
@@ -595,22 +668,25 @@ void DrawNode(FNode node)
             default: break;
         }
         
-        DrawRectangleRec(node->inputShape, GRAY);
+        DrawRectangleRec(node->inputShape, ((CheckCollisionPointRec(mousePosition, node->inputShape) ? LIGHTGRAY : GRAY)));
         DrawRectangleLines(node->inputShape.x, node->inputShape.y, node->inputShape.width, node->inputShape.height, BLACK);
         
-        DrawRectangleRec(node->outputShape, GRAY);
+        DrawRectangleRec(node->outputShape, ((CheckCollisionPointRec(mousePosition, node->outputShape) ? LIGHTGRAY : GRAY)));
         DrawRectangleLines(node->outputShape.x, node->outputShape.y, node->outputShape.width, node->outputShape.height, BLACK);
         
-        const char *string =
-        "id: %i\n"
-        "type: %i\n"
-        "name: %s\n"
-        "inputs: %i, %i, %i, %i, %i, %i, %i, %i (count: %i)\n"
-        "output: %.02f, %.02f, %.02f, %.02f (count: %i)\n"
-        "shape: %i %i, %i, %i";
-        
-        DrawText(FormatText(string, node->id, node->type, node->name, node->inputs[0], node->inputs[1], node->inputs[2], node->inputs[3], node->inputs[4], 
-        node->inputs[5], node->inputs[6], node->inputs[7], node->inputsCount, node->output.values[0], node->output.values[1], node->output.values[2], node->output.values[3], node->output.valuesCount, node->shape.x, node->shape.y, node->shape.width, node->shape.height), 10, 10 + 100*node->id, 10, BLACK);
+        if (debugMode)
+        {
+            const char *string =
+            "id: %i\n"
+            "type: %i\n"
+            "name: %s\n"
+            "inputs: %i, %i, %i, %i, %i, %i, %i, %i (count: %i)\n"
+            "output: %.02f, %.02f, %.02f, %.02f (count: %i)\n"
+            "shape: %i %i, %i, %i";
+            
+            DrawText(FormatText(string, node->id, node->type, node->name, node->inputs[0], node->inputs[1], node->inputs[2], node->inputs[3], node->inputs[4], 
+            node->inputs[5], node->inputs[6], node->inputs[7], node->inputsCount, node->output.values[0], node->output.values[1], node->output.values[2], node->output.values[3], node->output.valuesCount, node->shape.x, node->shape.y, node->shape.width, node->shape.height), 10, 10 + 100*node->id, 10, BLACK);
+        }
     }
     else TraceLog(1, "FNode: error trying to draw a null referenced node\n");
 }
@@ -660,14 +736,17 @@ void DrawNodeLine(FLine line)
         }
         else TraceLog(1, "FNode: error when trying to find node id %i due to index is out of bounds %i\n", line->from, indexFrom);
         
-        DrawLine(from.x, from.y, to.x, to.y, BLACK);
-                
-        const char *string =
-        "id: %i\n"
-        "from: %i\n"
-        "to: %i\n";
+        DrawLine(from.x, from.y, to.x, to.y, ((tempLine->id == line->id && tempLine->to == -1) ? GRAY : BLACK));
         
-        DrawText(FormatText(string, line->id, line->from, line->to), screenSize.x*0.85f - 10 - 50, 10 + 75*line->id, 10, BLACK);
+        if (debugMode)
+        {
+            const char *string =
+            "id: %i\n"
+            "from: %i\n"
+            "to: %i\n";
+            
+            DrawText(FormatText(string, line->id, line->from, line->to), screenSize.x*0.85f - 10 - 50, 10 + 75*line->id, 10, BLACK);
+        }
     }
     else TraceLog(1, "FNode: error trying to draw a null referenced line\n");
 }
