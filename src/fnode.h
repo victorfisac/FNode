@@ -56,6 +56,7 @@
 #define     UI_BORDER_DEFAULT_COLOR     125                     // Interface button border color
 #define     VISOR_BORDER                2                       // Visor window border width
 #define     VISOR_MODEL_ROTATION        0.0f                    // Visor model rotation speed
+#define     RENDER_SAMPLING             2                       // Screen render to texture samples
 
 #define     FNODE_MALLOC(size)          malloc(size)            // Memory allocation function as define
 #define     FNODE_FREE(ptr)             free(ptr)               // Memory deallocation function as define
@@ -123,6 +124,7 @@ typedef enum {
     FNODE_PROJECTION,
     FNODE_REJECTION,
     FNODE_HALFDIRECTION,
+    FNODE_SAMPLER2D,
     FNODE_VERTEX,
     FNODE_FRAGMENT
 } FNodeType;
@@ -153,6 +155,7 @@ typedef struct FNodeData {
     int inputs[MAX_INPUTS];                 // Inputs node ids array
     unsigned int inputsCount;               // Inputs node ids array length
     unsigned int inputsLimit;               // Inputs node ids length limit
+    bool property;                          // Node is property state
     FNodeOutput output;                     // Value output (contains the value and its length)
     Rectangle shape;                        // Node rectangle data
     Rectangle inputShape;                   // Node input rectangle data (automatically calculated from shape)
@@ -206,7 +209,7 @@ int selectedCommentNodes[MAX_NODES];        // Current selected comment nodes id
 int selectedCommentNodesCount;              // Current selected comment nodes ids list count
 FComment tempComment = NULL;                // Temporally created comment during comment states
 Vector2 tempCommentPos = { 0, 0 };          // Temporally created comment start position
-Vector2 screenSize = { 1280, 720 };         // Window screen width
+Vector2 screenSize = { 1920, 1080 };        // Window screen width
 Camera2D camera;                            // Node area 2d camera for panning
 Camera camera3d;                            // Visor camera 3d for model and shader visualization
 bool debugMode = false;                     // Drawing debug information state
@@ -223,6 +226,7 @@ FNode CreateNodeVector3(Vector3 vector);                                    // C
 FNode CreateNodeVector4(Vector4 vector);                                    // Creates a Vector4 node (4 float)
 FNode CreateNodeOperator(FNodeType type, const char *name, int inputs);     // Creates an operator node with type name and inputs limit as parameters
 FNode CreateNodeUniform(FNodeType type, const char *name, int dataCount);   // Creates an uniform node with type name and data count as parameters
+FNode CreateNodeProperty(FNodeType type, const char *name, int dataCount, int inputs);  // Creates a property node with type name and data count as parameters
 FNode CreateNodeMaterial(FNodeType type, const char *name, int dataCount);  // Creates the main node that contains final fragment color
 FNode InitializeNode(bool isOperator);                                      // Initializes a new node with generic parameters
 int GetNodeIndex(int id);                                                   // Returns the index of a node searching by its id
@@ -473,6 +477,22 @@ FNode CreateNodeUniform(FNodeType type, const char *name, int dataCount)
     return newNode;
 }
 
+// Creates a property node with type name and data count as parameters
+FNode CreateNodeProperty(FNodeType type, const char *name, int dataCount, int inputs)
+{
+    FNode newNode = InitializeNode(false); // (((type == FNODE_SAMPLER2D) ? true : false));
+
+    newNode->type = type;
+    newNode->name = name;
+    newNode->output.dataCount = dataCount;
+    newNode->property = true;
+    newNode->inputsLimit = inputs;
+
+    UpdateNodeShapes(newNode);
+
+    return newNode;
+}
+
 // Creates the main node that contains final material attributes
 FNode CreateNodeMaterial(FNodeType type, const char *name, int dataCount)
 {
@@ -526,6 +546,7 @@ FNode InitializeNode(bool isOperator)
     for (int i = 0; i < MAX_INPUTS; i++) newNode->inputs[i] = -1;
     newNode->inputsCount = 0;
     newNode->inputsLimit = MAX_INPUTS;
+    newNode->property = false;
 
     // Initialize shapes
     newNode->shape = (Rectangle){ GetRandomValue(-camera.offset.x + 0, -camera.offset.x + screenSize.x*0.85f - 50*4), GetRandomValue(-camera.offset.y + screenSize.y/2 - 20 - 100, camera.offset.y + screenSize.y/2 - 20 + 100), 10 + NODE_DATA_WIDTH, 40 };
@@ -889,9 +910,9 @@ void CalculateValues()
                                 {
                                     for (int j = 0; j < nodes[i]->output.dataCount; j++)
                                     {
-                                        if (nodes[inputIndex]->output.dataCount == 16 && nodes[i]->output.dataCount == 3)
+                                        if (nodes[inputIndex]->output.dataCount == 16 && nodes[i]->output.dataCount == 4)
                                         {
-                                            Vector4 vector = { nodes[i]->output.data[0].value, nodes[i]->output.data[1].value, nodes[i]->output.data[2].value, 1.0f };
+                                            Vector4 vector = { nodes[i]->output.data[0].value, nodes[i]->output.data[1].value, nodes[i]->output.data[2].value, nodes[i]->output.data[3].value };
                                             Matrix matrix = { nodes[inputIndex]->output.data[4].value, nodes[inputIndex]->output.data[5].value, nodes[inputIndex]->output.data[6].value, nodes[inputIndex]->output.data[7].value,
                                             nodes[inputIndex]->output.data[8].value, nodes[inputIndex]->output.data[9].value, nodes[inputIndex]->output.data[10].value, nodes[inputIndex]->output.data[11].value,
                                             nodes[inputIndex]->output.data[12].value, nodes[inputIndex]->output.data[13].value, nodes[inputIndex]->output.data[14].value, nodes[inputIndex]->output.data[15].value };
@@ -904,9 +925,9 @@ void CalculateValues()
                                             nodes[i]->output.data[3].value = vector.w;
                                             nodes[i]->output.dataCount = 4;
                                         }
-                                        else if (nodes[inputIndex]->output.dataCount == 3 && nodes[i]->output.dataCount == 16)
+                                        else if (nodes[inputIndex]->output.dataCount == 4 && nodes[i]->output.dataCount == 16)
                                         {
-                                            Vector4 vector = { nodes[inputIndex]->output.data[0].value, nodes[inputIndex]->output.data[1].value, nodes[inputIndex]->output.data[2].value, 1.0f };
+                                            Vector4 vector = { nodes[inputIndex]->output.data[0].value, nodes[inputIndex]->output.data[1].value, nodes[inputIndex]->output.data[2].value, nodes[inputIndex]->output.data[3].value };
                                             Matrix matrix = { nodes[i]->output.data[4].value, nodes[i]->output.data[5].value, nodes[i]->output.data[6].value, nodes[i]->output.data[7].value,
                                             nodes[i]->output.data[8].value, nodes[i]->output.data[9].value, nodes[i]->output.data[10].value, nodes[i]->output.data[11].value,
                                             nodes[i]->output.data[12].value, nodes[i]->output.data[13].value, nodes[i]->output.data[14].value, nodes[i]->output.data[15].value };
@@ -968,7 +989,7 @@ void CalculateValues()
                     nodes[i]->output.dataCount = 0;
                 }
             }
-            else if (nodes[i]->type > FNODE_APPEND)
+            else if ((nodes[i]->type > FNODE_APPEND) && (nodes[i]->type != FNODE_SAMPLER2D))
             {
                 if (nodes[i]->inputsCount > 0)
                 {
@@ -1534,7 +1555,8 @@ void DrawNode(FNode node)
 {
     if (node != NULL)
     {
-        DrawRectangleRec(node->shape, ((node->id == selectedNode) ? GRAY : LIGHTGRAY));
+        if (node->property) DrawRectangleRec(node->shape, ((node->id == selectedNode) ? (Color){ 128, 204, 139, 255 } : (Color){ 173, 225, 181, 255 }));
+        else DrawRectangleRec(node->shape, ((node->id == selectedNode) ? GRAY : LIGHTGRAY));
         DrawRectangleLines(node->shape.x, node->shape.y, node->shape.width, node->shape.height, BLACK);
         DrawText(FormatText("%s [ID: %i]", node->name, node->id), node->shape.x + node->shape.width/2 - MeasureText(FormatText("%s [ID: %i]", node->name, node->id), 10)/2, node->shape.y - 15, 10, BLACK);
 

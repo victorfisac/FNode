@@ -10,7 +10,7 @@ float modelRotation = 0.0f;                 // Current model visualization rotat
 int scrollState = 0;                        // Current mouse drag interface scroll state
 Vector2 canvasSize;                         // Interface screen size
 float menuScroll = 10.0f;                   // Current interface scrolling amount
-Vector2 scrollLimits = { 10, 1000 };        // Interface scrolling limits
+Vector2 scrollLimits = { 10, 1385 };        // Interface scrolling limits
 Rectangle menuScrollRec = { 0, 0, 0, 0 };   // Interface scroll rectangle bounds
 Vector2 menuScrollLimits = { 5, 685 };      // Interface scroll rectangle position limits
 Rectangle canvasScroll = { 0, 0, 0, 0 };    // Interface scroll rectangle bounds
@@ -22,6 +22,7 @@ Shader shader;                              // Visor model shader
 int viewUniform = -1;                       // Created shader view direction uniform location point
 int transformUniform = -1;                  // Created shader model transform uniform location point
 bool loadedShader = false;                  // Current loaded custom shader state
+int textureCount = 0;                       // Compiling shader current texture used count
 
 // Functions declarations
 void CheckPreviousShader();                                 // Check if there are a compatible shader in output folder
@@ -50,7 +51,7 @@ int main()
 {
     // Initialization
     //--------------------------------------------------------------------------------------
-    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
+    SetConfigFlags(FLAG_FULLSCREEN_MODE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
     InitWindow(screenSize.x, screenSize.y, "fnode 1.0");
     SetTargetFPS(60);
     SetLineWidth(3);
@@ -144,19 +145,21 @@ void CheckPreviousShader()
             float inputsCount = -1;
             float inputsLimit = -1;
             float dataCount = -1;
+            float property = -1;
             float data[MAX_VALUES] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
             float shapeX = -1;
             float shapeY = -1;
 
-            while (fscanf(dataFile, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,\n", &type,
+            while (fscanf(dataFile, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,\n", &type, &property,
             &inputs[0], &inputs[1], &inputs[2], &inputs[3], &inputsCount, &inputsLimit, &dataCount, &data[0], &data[1], &data[2],
             &data[3], &data[4], &data[5], &data[6], &data[7], &data[8], &data[9], &data[10], &data[11], &data[12], &data[13], &data[14],
             &data[15], &shapeX, &shapeY) > 0)
             {                
                 FNode newNode = InitializeNode(true);
                 newNode->type = type;
+                newNode->property = property;
 
-                if (type < FNODE_ADD) newNode->inputShape = (Rectangle){ 0, 0, 0, 0 };
+                if ((type < FNODE_ADD)|| (type == FNODE_SAMPLER2D)) newNode->inputShape = (Rectangle){ 0, 0, 0, 0 };
 
                 switch ((int)type)
                 {
@@ -210,6 +213,7 @@ void CheckPreviousShader()
                     case FNODE_PROJECTION: newNode->name = "Projection Vector"; break;
                     case FNODE_REJECTION: newNode->name = "Rejection Vector"; break;
                     case FNODE_HALFDIRECTION: newNode->name = "Half Direction"; break;
+                    case FNODE_SAMPLER2D: newNode->name = "Sampler 2D"; break;
                     case FNODE_VERTEX: newNode->name = "Final Vertex Position"; break;
                     case FNODE_FRAGMENT: newNode->name = "Final Fragment Color"; break;
                     default: break;
@@ -308,7 +312,7 @@ void UpdateScroll()
     }
     else
     {
-        menuScroll += mouseDelta.y*1.45f;
+        menuScroll += mouseDelta.y*2.0f;
         menuScrollRec.y += mouseDelta.y;
 
         if (menuScrollRec.y >= menuScrollLimits.y)
@@ -939,6 +943,7 @@ void CompileShader()
     remove(DATA_PATH);
     remove(VERTEX_PATH);
     remove(FRAGMENT_PATH);
+    textureCount = 0;
 
     // Open shader data file
     FILE *dataFile = fopen(DATA_PATH, "w");
@@ -953,6 +958,7 @@ void CompileShader()
                 if (nodes[k]->id == i)
                 {
                     float type = (float)nodes[k]->type;
+                    float property = (float)nodes[k]->property;
                     float inputs[MAX_INPUTS] = { (float)nodes[k]->inputs[0], (float)nodes[k]->inputs[1], (float)nodes[k]->inputs[2], (float)nodes[k]->inputs[3] };
                     float inputsCount = (float)nodes[k]->inputsCount;
                     float inputsLimit = (float)nodes[k]->inputsLimit;
@@ -963,7 +969,7 @@ void CompileShader()
                     float shapeX = (float)nodes[k]->shape.x;
                     float shapeY = (float)nodes[k]->shape.y;
 
-                    fprintf(dataFile, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,\n", type,
+                    fprintf(dataFile, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,\n", type, property,
                     inputs[0], inputs[1], inputs[2], inputs[3], inputsCount, inputsLimit, dataCount, data[0], data[1], data[2],
                     data[3], data[4], data[5], data[6], data[7], data[8], data[9], data[10], data[11], data[12], data[13], data[14],
                     data[15], shapeX, shapeY);
@@ -1026,7 +1032,7 @@ void CompileShader()
         "uniform mat4 mvpMatrix;          \n\n";
         fprintf(vertexFile, vUniforms);
         
-        fprintf(vertexFile, "// Constant values\n");
+        fprintf(vertexFile, "// Constant and uniform values\n");
         int index = GetNodeIndex(nodes[0]->inputs[0]);
         CheckConstant(nodes[index], vertexFile);
 
@@ -1039,6 +1045,7 @@ void CompileShader()
         "    fragColor = vertexColor;     \n\n";
         fprintf(vertexFile, vMain);
 
+        textureCount = 0;
         CompileNode(nodes[index], vertexFile, false);
 
         switch (nodes[index]->output.dataCount)
@@ -1074,8 +1081,6 @@ void CompileShader()
 
         fprintf(fragmentFile, "// Uniform attributes\n");
         const char fUniforms[] = 
-        "uniform sampler2D texture0;       \n"
-        "uniform vec4 colDiffuse;          \n"
         "uniform vec3 viewDirection;       \n"
         "uniform mat4 modelMatrix;       \n\n";
         fprintf(fragmentFile, fUniforms);
@@ -1085,7 +1090,7 @@ void CompileShader()
         "out vec4 finalColor;            \n\n";
         fprintf(fragmentFile, fOut);
 
-        fprintf(fragmentFile, "// Constant values\n");
+        fprintf(fragmentFile, "// Constant and uniform values\n");
         int index = GetNodeIndex(nodes[1]->inputs[0]);
         CheckConstant(nodes[index], fragmentFile);
 
@@ -1093,6 +1098,7 @@ void CompileShader()
         "\nvoid main()                      \n"
         "{                                  \n";
         fprintf(fragmentFile, fMain);
+        textureCount = 0;
 
         CompileNode(nodes[index], fragmentFile, true);
 
@@ -1128,8 +1134,16 @@ void CheckConstant(FNode node, FILE *file)
         case FNODE_E: fprintf(file, "const float node_%02i = 2.71828182845904523536;\n"); break;
         case FNODE_VALUE:
         {
-            const char fConstantValue[] = "const float node_%02i = %.3f;\n";
-            fprintf(file, fConstantValue, node->id, node->output.data[0].value);
+            if (node->property)
+            {
+                const char fConstantVector4[] = "uniform float node_%02i;\n";
+                fprintf(file, fConstantVector4, node->id);
+            }
+            else
+            {
+                const char fConstantValue[] = "const float node_%02i = %.3f;\n";
+                fprintf(file, fConstantValue, node->id, node->output.data[0].value);
+            }
         } break;
         case FNODE_VECTOR2:
         {
@@ -1143,8 +1157,22 @@ void CheckConstant(FNode node, FILE *file)
         } break;
         case FNODE_VECTOR4:
         {
-            const char fConstantVector4[] = "const vec4 node_%02i = vec4(%.3f, %.3f, %.3f, %.3f);\n";
-            fprintf(file, fConstantVector4, node->id, node->output.data[0].value, node->output.data[1].value, node->output.data[2].value, node->output.data[3].value);
+            if (node->property)
+            {
+                const char fConstantVector4[] = "uniform vec4 node_%02i;\n";
+                fprintf(file, fConstantVector4, node->id);
+            }
+            else
+            {
+                const char fConstantVector4[] = "const vec4 node_%02i = vec4(%.3f, %.3f, %.3f, %.3f);\n";
+                fprintf(file, fConstantVector4, node->id, node->output.data[0].value, node->output.data[1].value, node->output.data[2].value, node->output.data[3].value);
+            }
+        } break;
+        case FNODE_SAMPLER2D:
+        {
+            const char fConstantSampler[] = "uniform sampler2D texture%i;\n";
+            fprintf(file, fConstantSampler, textureCount);
+            textureCount++;
         } break;
         default:
         {
@@ -1161,7 +1189,7 @@ void CheckConstant(FNode node, FILE *file)
 void CompileNode(FNode node, FILE *file, bool fragment)
 {
     // Check if current node is an operator
-    if ((node->inputsCount > 0) || ((node->type < FNODE_MATRIX) && (node->type > FNODE_E)))
+    if ((node->inputsCount > 0) || ((node->type < FNODE_MATRIX) && (node->type > FNODE_E)) || (node->type == FNODE_SAMPLER2D))
     {
         // Check for operator nodes in inputs to compile them first
         for (int i = 0; i < node->inputsCount; i++)
@@ -1180,6 +1208,7 @@ void CompileNode(FNode node, FILE *file, bool fragment)
             {
                 if (fragment) sprintf(check, "vec3 node_%02i", node->id);
                 else if (node->type == FNODE_VERTEXPOSITION) sprintf(check, "vec4 node_%02i", node->id); 
+                else sprintf(check, "vec3 node_%02i", node->id); 
             } break;
             case 4: sprintf(check, "vec4 node_%02i", node->id); break;
             case 16: sprintf(check, "mat4 node_%02i", node->id); break;
@@ -1190,7 +1219,7 @@ void CompileNode(FNode node, FILE *file, bool fragment)
         if (!FSearch(FRAGMENT_PATH, check))
         {
             // Variable definition based on current node output data count
-            char body[1024] = { '\0' };
+            char body[2048] = { '\0' };
             char definition[32] = { '\0' };
             switch (node->output.dataCount)
             {
@@ -1207,9 +1236,8 @@ void CompileNode(FNode node, FILE *file, bool fragment)
             }
             strcat(body, definition);
 
-            if ((node->type < FNODE_MATRIX) && (node->type > FNODE_E))
+            if (((node->type < FNODE_MATRIX) && (node->type > FNODE_E)) || (node->type == FNODE_SAMPLER2D))
             {
-                char temp[32] = { '\0' };
                 switch (node->type)
                 {
                     case FNODE_VERTEXPOSITION:
@@ -1221,6 +1249,14 @@ void CompileNode(FNode node, FILE *file, bool fragment)
                     case FNODE_FRESNEL: strcat(body, "1 - dot(fragNormal, viewDirection);\n"); break;
                     case FNODE_VIEWDIRECTION: strcat(body, "viewDirection;\n"); break;
                     case FNODE_MVP: strcat(body, "mvpMatrix;\n"); break;
+                    case FNODE_SAMPLER2D:
+                    {
+                        char test[64] = { '\0' };
+                        sprintf(test, "texture(texture%i, fragTexCoord);\n", textureCount);
+                        strcat(body, test);
+                        textureCount++;
+                        break;
+                    }
                     default: break;
                 }
             }
@@ -1477,6 +1513,11 @@ void DrawInterface()
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vector 4")) CreateNodeVector4((Vector4){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Matrix 4x4")) CreateNodeMatrix(FMatrixIdentity());
 
+    DrawText("Properties", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Properties", 10))/2 - UI_PADDING_SCROLL/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, 10, WHITE); menuOffset++;
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Value")) CreateNodeProperty(FNODE_VALUE, "Value", 1, 0);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Color")) CreateNodeProperty(FNODE_VECTOR4, "Color", 4, 0);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Sampler 2D")) CreateNodeProperty(FNODE_SAMPLER2D, "Sampler 2D", 4, 0);
+    
     DrawText("Arithmetic", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Arithmetic", 10))/2 - UI_PADDING_SCROLL/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, 10, WHITE); menuOffset++;
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Add")) CreateNodeOperator(FNODE_ADD, "Add", MAX_INPUTS);
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Subtract")) CreateNodeOperator(FNODE_SUBTRACT, "Subtract", MAX_INPUTS);
@@ -1515,7 +1556,7 @@ void DrawInterface()
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Half Direction")) CreateNodeOperator(FNODE_HALFDIRECTION, "Half Direction", 2);
 
     DrawText("Geometry Data", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Geometry Data", 10))/2 - UI_PADDING_SCROLL/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, 10, WHITE); menuOffset++;
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vertex Position")) CreateNodeUniform(FNODE_VERTEXPOSITION, "Vertex Position", 3);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vertex Position")) CreateNodeUniform(FNODE_VERTEXPOSITION, "Vertex Position", 4);
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Normal Direction")) CreateNodeUniform(FNODE_VERTEXNORMAL, "Normal Direction", 3);
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "View Direction")) CreateNodeUniform(FNODE_VIEWDIRECTION, "View Direction", 3);
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Fresnel")) CreateNodeUniform(FNODE_FRESNEL, "Fresnel", 1);
@@ -1527,7 +1568,7 @@ void DrawInterface()
 
     DrawText("Trigonometry", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Trigonometry", 10))/2 - UI_PADDING_SCROLL/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, 10, WHITE); menuOffset++;
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Cosine")) CreateNodeOperator(FNODE_COS, "Cosine", 1);
-    if (FButton((Rçectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Sine")) CreateNodeOperator(FNODE_SIN, "Sine", 1);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Sine")) CreateNodeOperator(FNODE_SIN, "Sine", 1);
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Tangent")) CreateNodeOperator(FNODE_TAN, "Tangent", 1);
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Deg to Rad")) CreateNodeOperator(FNODE_DEG2RAD, "Deg to Rad", 1);
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Rad to Deg")) CreateNodeOperator(FNODE_RAD2DEG, "Rad to Deg", 1);
