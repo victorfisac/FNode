@@ -1,0 +1,10 @@
+1 ICON fnode.ico
+VALUE "Comments",         "comment\0"
+VALUE "CompanyName",      "Victor Fisac Fuentes\0"
+VALUE "FileDescription",  "Fnode 1.0 - Node based tool to create shaders\0"
+VALUE "FileVersion",      "1.0.0.0 TP\0"
+VALUE "InternalName",     "fnode\0"
+VALUE "LegalCopyright",   "Victor Fisac, 2016. All rights reserved.\0"
+VALUE "OriginalFilename", "fnode.exe\0"
+VALUE "ProductName",      "FNode\0"
+VALUE "ProductVersion",   "1.0.0.0 TP\0"
