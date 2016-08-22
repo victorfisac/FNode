@@ -23,15 +23,20 @@
 *
 **********************************************************************************************/
 
-// External includes
-#include <raylib.h>         // Required for window management, 2D camera drawing and inputs detection
-#include <stdlib.h>         // Required for: malloc(), free(), abs(), exit(), atof()
-#include <stdio.h>          // Required for: FILE, fopen(), fprintf(), fclose(), fscanf(), stdout, vprintf(), sprintf(), fgets()
-#include <string.h>         // Required for: strcat(), strstr()
-#include <math.h>           // Required for: fabs(), sqrt(), sinf(), cosf(), cos(), sin(), tan(), pow(), floor()
-#include <stdarg.h>         // Required for: va_list, va_start(), vfprintf(), va_end()
+//----------------------------------------------------------------------------------
+// External Includes
+//----------------------------------------------------------------------------------
+#include <raylib.h>             // Required for window management, 2D camera drawing and inputs detection
+#include <stdlib.h>             // Required for: malloc(), free(), abs(), exit(), atof()
+#include <stdio.h>              // Required for: FILE, fopen(), fprintf(), fclose(), fscanf(), stdout, vprintf(), sprintf(), fgets()
+#include <string.h>             // Required for: strcat(), strstr()
+#include <math.h>               // Required for: fabs(), sqrt(), sinf(), cosf(), cos(), sin(), tan(), pow(), floor()
+#include <stdarg.h>             // Required for: va_list, va_start(), vfprintf(), va_end()
+#include "external/glad.h"      // Required for GLAD extensions loading library, includes OpenGL headers
 
-// Defines
+//----------------------------------------------------------------------------------
+// Defines and Macros
+//----------------------------------------------------------------------------------
 #define     MAX_INPUTS                  4                       // Max number of inputs in every node
 #define     MAX_VALUES                  16                      // Max number of values in every output
 #define     MAX_NODES                   128                     // Max number of nodes
@@ -43,39 +48,23 @@
 #define     NODE_LINE_DIVISIONS         20                      // Node curved line divisions
 #define     NODE_DATA_WIDTH             30                      // Node data text width
 #define     NODE_DATA_HEIGHT            30                      // Node data text height
-#define     UI_PADDING                  5                       // Interface bounds padding with background
-#define     UI_PADDING_SCROLL           20                      // Interface scroll bar padding
-#define     UI_BUTTON_HEIGHT            30                      // Interface bounds height
-#define     UI_SCROLL                   20                      // Interface scroll sensitivity
 #define     UI_GRID_SPACING             25                      // Interface canvas background grid divisions length
-#define     UI_GRID_ALPHA               0.25f                   // Interface canvas background grid lines alpha
 #define     UI_GRID_COUNT               100                     // Interface canvas background grid divisions count
 #define     UI_COMMENT_WIDTH            220                     // Interface comment text box width
 #define     UI_COMMENT_HEIGHT           25                      // Interface comment text box height
 #define     UI_BUTTON_DEFAULT_COLOR     LIGHTGRAY               // Interface button background color
 #define     UI_BORDER_DEFAULT_COLOR     125                     // Interface button border color
-#define     VISOR_BORDER                2                       // Visor window border width
-#define     VISOR_MODEL_ROTATION        0.0f                    // Visor model rotation speed
-#define     RENDER_SAMPLING             2                       // Screen render to texture samples
 
 #define     FNODE_MALLOC(size)          malloc(size)            // Memory allocation function as define
 #define     FNODE_FREE(ptr)             free(ptr)               // Memory deallocation function as define
 
-#define     VERTEX_PATH                 "output/vertex.vs"      // Vertex shader output path
-#define     FRAGMENT_PATH               "output/fragment.fs"    // Fragment shader output path
-#define     DATA_PATH                   "output/shader.data"    // Created shader data output path
-
-// Structs
-typedef struct Vector4 {
-    float x;
-    float y;
-    float z;
-    float w;
-} Vector4;
-
+//----------------------------------------------------------------------------------
+// Enums Definition
+//----------------------------------------------------------------------------------
 typedef enum {
     FNODE_PI = -2,
     FNODE_E,
+    FNODE_TIME,
     FNODE_VERTEXPOSITION,
     FNODE_VERTEXNORMAL,
     FNODE_FRESNEL,
@@ -104,6 +93,7 @@ typedef enum {
     FNODE_SQRT,
     FNODE_TRUNC,
     FNODE_ROUND,
+    FNODE_VERTEXCOLOR,
     FNODE_CEIL,
     FNODE_CLAMP01,
     FNODE_EXP2,
@@ -136,7 +126,16 @@ typedef enum {
     BUTTON_CLICKED
 } ButtonState;
 
-// Structs
+//----------------------------------------------------------------------------------
+// Types and Structures Definition
+//----------------------------------------------------------------------------------
+typedef struct Vector4 {
+    float x;
+    float y;
+    float z;
+    float w;
+} Vector4;
+
 typedef struct FNodeValue {
     float value;                            // Output data value
     Rectangle shape;                        // Output data shape
@@ -183,7 +182,9 @@ typedef struct FCommentData {
     Rectangle sizeBrShape;                  // Comment bottom-right size edit rectangle data
 } FCommentData, *FComment;
 
-// Global variables
+//------------------------------------------------------------------------------------
+// Global Variables Definition
+//------------------------------------------------------------------------------------
 int usedMemory = 0;                         // Total used RAM from memory allocation
 
 int nodesCount = 0;                         // Created nodes count
@@ -209,13 +210,15 @@ int selectedCommentNodes[MAX_NODES];        // Current selected comment nodes id
 int selectedCommentNodesCount;              // Current selected comment nodes ids list count
 FComment tempComment = NULL;                // Temporally created comment during comment states
 Vector2 tempCommentPos = { 0, 0 };          // Temporally created comment start position
-Vector2 screenSize = { 1920, 1080 };        // Window screen width
+Vector2 screenSize = { 1280, 720 };         // Window screen width
 Camera2D camera;                            // Node area 2d camera for panning
 Camera camera3d;                            // Visor camera 3d for model and shader visualization
 bool debugMode = false;                     // Drawing debug information state
 int menuOffset = 0;                         // Interface elements position current offset
 
-// FNode functions declarations
+//------------------------------------------------------------------------------------
+// FNode Functions 
+//------------------------------------------------------------------------------------
 void InitFNode();                                                           // Initializes FNode global variables
 FNode CreateNodePI();                                                       // Creates a node which returns PI value
 FNode CreateNodeE();                                                        // Creates a node which returns e value
@@ -248,7 +251,9 @@ void DestroyComment(FComment comment);                                      // D
 void CloseFNode();                                                          // Unitializes FNode global variables
 void TraceLogFNode(bool error, const char *text, ...);                      // Outputs a trace log message
 
-// FNode math functions declarations
+//------------------------------------------------------------------------------------
+// Math Functions 
+//------------------------------------------------------------------------------------
 float FVector2Length(Vector2 v);                                // Returns length of a Vector2
 float FVector3Length(Vector3 v);                                // Returns length of a Vector3
 float FVector4Length(Vector4 v);                                // Returns length of a Vector4
@@ -287,12 +292,16 @@ float FSmoothStep(float min, float max, float value);           // Returns the i
 float FEaseLinear(float t, float b, float c, float d);          // Returns an ease linear value between two parameters 
 float FEaseInOutQuad(float t, float b, float c, float d);       // Returns an ease quadratic in-out value between two parameters
 
-// FNode string functions declarations
+//------------------------------------------------------------------------------------
+// String Functions
+//------------------------------------------------------------------------------------
 void FStringToFloat(float *pointer, const char *string);        // Sends a float conversion value of a string to an initialized float pointer
 void FFloatToString(char *buffer, float value);                 // Sends formatted output to an initialized string pointer
 int FSearch(char *filename, char *string);                      // Returns 1 if a specific string is found in a text file
 
-// Functions definitions
+//------------------------------------------------------------------------------------
+// Functions Declarations
+//------------------------------------------------------------------------------------
 // Initializes FNode global variables
 void InitFNode()
 {
@@ -301,6 +310,9 @@ void InitFNode()
     commentsCount = 0;
     selectedCommentNodesCount = 0;
     for (int i = 0; i < MAX_NODES; i++) selectedCommentNodes[i] = -1;
+
+    // Initialize OpenGL states
+    glDisable(GL_CULL_FACE);
 
     TraceLogFNode(false, "initialization complete");
 }
@@ -1558,7 +1570,7 @@ void DrawNode(FNode node)
         if (node->property) DrawRectangleRec(node->shape, ((node->id == selectedNode) ? (Color){ 128, 204, 139, 255 } : (Color){ 173, 225, 181, 255 }));
         else DrawRectangleRec(node->shape, ((node->id == selectedNode) ? GRAY : LIGHTGRAY));
         DrawRectangleLines(node->shape.x, node->shape.y, node->shape.width, node->shape.height, BLACK);
-        DrawText(FormatText("%s [ID: %i]", node->name, node->id), node->shape.x + node->shape.width/2 - MeasureText(FormatText("%s [ID: %i]", node->name, node->id), 10)/2, node->shape.y - 15, 10, BLACK);
+        DrawText(node->name, node->shape.x + node->shape.width/2 - MeasureText(node->name, 10)/2, node->shape.y - 15, 10, BLACK);
 
         if ((node->type >= FNODE_MATRIX) && (node->type <= FNODE_VECTOR4))
         {
@@ -1639,12 +1651,18 @@ void DrawNode(FNode node)
             }
         }
 
-        if (node->inputsCount > 0) DrawRectangleRec(node->inputShape, ((CheckCollisionPointRec(GetMousePosition(), CameraToViewRec(node->inputShape, camera)) ? LIGHTGRAY : GRAY)));
-        else DrawRectangleRec(node->inputShape, ((CheckCollisionPointRec(GetMousePosition(), CameraToViewRec(node->inputShape, camera)) ? LIGHTGRAY : RED)));
-        DrawRectangleLines(node->inputShape.x, node->inputShape.y, node->inputShape.width, node->inputShape.height, BLACK);
+        if (node->inputShape.width > 0)
+        {
+            if (node->inputsCount > 0) DrawRectangleRec(node->inputShape, ((CheckCollisionPointRec(GetMousePosition(), CameraToViewRec(node->inputShape, camera)) ? LIGHTGRAY : GRAY)));
+            else DrawRectangleRec(node->inputShape, ((CheckCollisionPointRec(GetMousePosition(), CameraToViewRec(node->inputShape, camera)) ? LIGHTGRAY : RED)));
+            DrawRectangleLines(node->inputShape.x, node->inputShape.y, node->inputShape.width, node->inputShape.height, BLACK);
+        }
 
-        DrawRectangleRec(node->outputShape, ((CheckCollisionPointRec(GetMousePosition(), CameraToViewRec(node->outputShape, camera)) ? LIGHTGRAY : GRAY)));
-        DrawRectangleLines(node->outputShape.x, node->outputShape.y, node->outputShape.width, node->outputShape.height, BLACK);
+        if (node->outputShape.width > 0)
+        {
+            DrawRectangleRec(node->outputShape, ((CheckCollisionPointRec(GetMousePosition(), CameraToViewRec(node->outputShape, camera)) ? LIGHTGRAY : GRAY)));
+            DrawRectangleLines(node->outputShape.x, node->outputShape.y, node->outputShape.width, node->outputShape.height, BLACK);
+        }
 
         if (debugMode)
         {
@@ -2120,7 +2138,6 @@ void TraceLogFNode(bool error, const char *text, ...)
     if (error) exit(1);
 }
 
-// Math functions definitions
 // Returns length of a Vector2
 float FVector2Length(Vector2 v)
 {
@@ -2541,7 +2558,6 @@ float FEaseInOutQuad(float t, float b, float c, float d)
 	return output;
 }
 
-// String functions definitions
 // Sends a float conversion value of a string to an initialized float pointer
 void FStringToFloat(float *pointer, const char *string)
 {

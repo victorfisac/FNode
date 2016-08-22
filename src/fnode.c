@@ -1,7 +1,51 @@
+/**********************************************************************************************
+*
+*   FNode 1.0 - Node based shading library
+*
+*   LICENSE: zlib/libpng
+*
+*   Copyright (c) 2016 Victor Fisac
+*
+*   This software is provided "as-is", without any express or implied warranty. In no event
+*   will the authors be held liable for any damages arising from the use of this software.
+*
+*   Permission is granted to anyone to use this software for any purpose, including commercial
+*   applications, and to alter it and redistribute it freely, subject to the following restrictions:
+*
+*     1. The origin of this software must not be misrepresented; you must not claim that you
+*     wrote the original software. If you use this software in a product, an acknowledgment
+*     in the product documentation would be appreciated but is not required.
+*
+*     2. Altered source versions must be plainly marked as such, and must not be misrepresented
+*     as being the original software.
+*
+*     3. This notice may not be removed or altered from any source distribution.
+*
+**********************************************************************************************/
+
+//----------------------------------------------------------------------------------
 // Includes
+//----------------------------------------------------------------------------------
 #include "fnode.h"      // Required for FNode framework functions
 
-/// Global variables
+//----------------------------------------------------------------------------------
+// Defines and Macros
+//----------------------------------------------------------------------------------
+#define     UI_PADDING                  5                       // Interface bounds padding with background
+#define     UI_PADDING_SCROLL           20                      // Interface scroll bar padding
+#define     UI_BUTTON_HEIGHT            30                      // Interface bounds height
+#define     UI_SCROLL                   20                      // Interface scroll sensitivity
+#define     UI_GRID_ALPHA               0.25f                   // Interface canvas background grid lines alpha
+#define     VISOR_MODEL_SCALE           8.0f                    // Visor model scale
+#define     VISOR_MODEL_ROTATION        1.0f                    // Visor model rotation speed
+#define     VISOR_BORDER                2                       // Visor window border width
+#define     VERTEX_PATH                 "output/shader.vs"      // Vertex shader output path
+#define     FRAGMENT_PATH               "output/shader.fs"      // Fragment shader output path
+#define     DATA_PATH                   "output/shader.fnode"   // Shader data output path
+
+//----------------------------------------------------------------------------------
+// Global Variables
+//----------------------------------------------------------------------------------
 Vector2 mousePosition = { 0, 0 };           // Current mouse position
 Vector2 lastMousePosition = { 0, 0 };       // Previous frame mouse position
 Vector2 mouseDelta = { 0, 0 };              // Current frame mouse position increment since previous frame
@@ -21,10 +65,15 @@ int fxaaUniform = -1;                       // FXAA shader viewport size uniform
 Shader shader;                              // Visor model shader
 int viewUniform = -1;                       // Created shader view direction uniform location point
 int transformUniform = -1;                  // Created shader model transform uniform location point
+int timeUniformV = -1;                       // Created shader current time uniform location point in vertex shader
+int timeUniformF = -1;                       // Created shader current time uniform location point in fragment shader
 bool loadedShader = false;                  // Current loaded custom shader state
 int textureCount = 0;                       // Compiling shader current texture used count
+float currentTime = 0;                      // Current global time to send to shader as attribute
 
-// Functions declarations
+//----------------------------------------------------------------------------------
+// Functions Declaration
+//----------------------------------------------------------------------------------
 void CheckPreviousShader();                                 // Check if there are a compatible shader in output folder
 void UpdateMouseData();                                     // Updates current mouse position and delta position
 void UpdateCanvas();                                        // Updates canvas space target and offset
@@ -47,85 +96,9 @@ void DrawCanvasGrid(int divisions);                         // Draw canvas grid 
 void DrawVisor();                                           // Draws a visor with default model rotating and current shader
 void DrawInterface();                                       // Draw interface to create nodes
 
-int main()
-{
-    // Initialization
-    //--------------------------------------------------------------------------------------
-    SetConfigFlags(FLAG_FULLSCREEN_MODE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
-    InitWindow(screenSize.x, screenSize.y, "fnode 1.0");
-    SetTargetFPS(60);
-    SetLineWidth(3);
-
-    // Load resources
-    model = LoadModel("res/model.obj");
-    visorTarget = LoadRenderTexture(screenSize.x/4, screenSize.y/4);
-    fxaa = LoadShader("res/fxaa.vs", "res/fxaa.fs");
-
-    // Initialize values
-    camera = (Camera2D){ (Vector2){ 0, 0 }, (Vector2){ screenSize.x/2, screenSize.y/2 }, 0.0f, 1.0f };
-    canvasSize = (Vector2){ screenSize.x*0.85f, screenSize.y };
-    camera3d = (Camera){{ 0.0f, 0.0f, 4.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, 45.0f };
-    menuScrollRec = (Rectangle){ screenSize.x - 17, 5, 9, 30 };
-
-    // Initialize shaders values
-    fxaaUniform = GetShaderLocation(fxaa, "viewportSize");
-    float viewportSize[2] = { screenSize.x/4, screenSize.y/4 };
-    SetShaderValue(fxaa, fxaaUniform, viewportSize, 2);
-
-    // Setup orbital camera
-    SetCameraPosition(camera3d.position);     // Set internal camera position to match our camera position
-    SetCameraTarget(camera3d.target);         // Set internal camera target to match our camera target
-
-    InitFNode();
-    CheckPreviousShader();
-    //--------------------------------------------------------------------------------------
-
-    // Main game loop
-    while (!WindowShouldClose())    // Detect window close button or ESC key
-    {
-        // Update
-        //----------------------------------------------------------------------------------
-        UpdateMouseData();
-        UpdateCanvas();
-        UpdateScroll();
-        UpdateNodesEdit();
-        UpdateNodesDrag();
-        UpdateNodesLink();
-        UpdateCommentCreationEdit();
-        UpdateCommentsEdit();
-        UpdateCommentsDrag();
-        UpdateShaderData();
-
-        if (IsKeyPressed('P')) debugMode = !debugMode;
-        //----------------------------------------------------------------------------------
-
-        // Draw
-        //----------------------------------------------------------------------------------
-        BeginDrawing();
-
-            ClearBackground(RAYWHITE);
-            DrawCanvas();
-            DrawInterface();
-            DrawVisor();
-
-        EndDrawing();
-        //----------------------------------------------------------------------------------
-    }
-
-    // De-Initialization
-    //--------------------------------------------------------------------------------------
-    UnloadRenderTexture(visorTarget);
-    UnloadModel(model);
-    UnloadShader(fxaa);
-    if (loadedShader) UnloadShader(shader);
-
-    CloseFNode();
-    CloseWindow();        // Close window and OpenGL context
-    //--------------------------------------------------------------------------------------
-
-    return 0;
-}
-
+//----------------------------------------------------------------------------------
+// Functions Definition
+//----------------------------------------------------------------------------------
 // Check if there are a compatible shader in output folder
 void CheckPreviousShader()
 {
@@ -136,6 +109,8 @@ void CheckPreviousShader()
         model.material.shader = shader;
         viewUniform = GetShaderLocation(shader, "viewDirection");
         transformUniform = GetShaderLocation(shader, "modelMatrix");
+        timeUniformV = GetShaderLocation(shader, "vertCurrentTime");
+        timeUniformF = GetShaderLocation(shader, "fragCurrentTime");
 
         FILE *dataFile = fopen(DATA_PATH, "r");
         if (dataFile != NULL)
@@ -165,6 +140,7 @@ void CheckPreviousShader()
                 {
                     case FNODE_PI: newNode->name = "Pi"; break;
                     case FNODE_E: newNode->name = "e"; break;
+                    case FNODE_TIME: newNode->name = "Current Time"; break;
                     case FNODE_VERTEXPOSITION: newNode->name = "Vertex Position"; break;
                     case FNODE_VERTEXNORMAL: newNode->name = "Normal Direction"; break;
                     case FNODE_FRESNEL: newNode->name = "Fresnel"; break;
@@ -193,6 +169,7 @@ void CheckPreviousShader()
                     case FNODE_SQRT: newNode->name = "Square Root"; break;
                     case FNODE_TRUNC: newNode->name = "Trunc"; break;
                     case FNODE_ROUND: newNode->name = "Round"; break;
+                    case FNODE_VERTEXCOLOR: newNode->name = "Vertex Color"; break;
                     case FNODE_CEIL: newNode->name = "Ceil"; break;
                     case FNODE_CLAMP01: newNode->name = "Clamp 0-1"; break;
                     case FNODE_EXP2: newNode->name = "Exp 2"; break;
@@ -214,8 +191,8 @@ void CheckPreviousShader()
                     case FNODE_REJECTION: newNode->name = "Rejection Vector"; break;
                     case FNODE_HALFDIRECTION: newNode->name = "Half Direction"; break;
                     case FNODE_SAMPLER2D: newNode->name = "Sampler 2D"; break;
-                    case FNODE_VERTEX: newNode->name = "Final Vertex Position"; break;
-                    case FNODE_FRAGMENT: newNode->name = "Final Fragment Color"; break;
+                    case FNODE_VERTEX: newNode->name = "[OUTPUT] Vertex Position"; break;
+                    case FNODE_FRAGMENT: newNode->name = "[OUTPUT] Fragment Color"; break;
                     default: break;
                 }
 
@@ -257,8 +234,8 @@ void CheckPreviousShader()
     
     if (!loadedShader)
     {
-        CreateNodeMaterial(FNODE_VERTEX, "Final Vertex Position", 0);
-        CreateNodeMaterial(FNODE_FRAGMENT, "Final Fragment Color", 0);
+        CreateNodeMaterial(FNODE_VERTEX, "[OUTPUT] Vertex Position", 0);
+        CreateNodeMaterial(FNODE_FRAGMENT, "[OUTPUT] Fragment Color", 0);
     }
 }
 
@@ -521,6 +498,7 @@ void UpdateNodesLink()
 
                             bool valuesCheck = true;
                             if (nodes[i]->type == FNODE_APPEND) valuesCheck = ((nodes[i]->output.dataCount + nodes[indexFrom]->output.dataCount <= 4) && (nodes[indexFrom]->output.dataCount == 1));
+                            else if (nodes[i]->type == FNODE_VERTEXCOLOR) valuesCheck = (nodes[indexFrom]->output.dataCount == 1);
                             else if ((nodes[i]->type == FNODE_POWER) && (nodes[i]->inputsCount == 1)) valuesCheck = (nodes[indexFrom]->output.dataCount == 1);
                             else if (nodes[i]->type == FNODE_STEP) valuesCheck = (nodes[indexFrom]->output.dataCount == 1);
                             else if (nodes[i]->type == FNODE_NORMALIZE) valuesCheck = ((nodes[indexFrom]->output.dataCount > 1) && (nodes[indexFrom]->output.dataCount <= 4));
@@ -925,6 +903,8 @@ void UpdateCommentsEdit()
 // Update required values to created shader for geometry data calculations
 void UpdateShaderData()
 {
+    currentTime += GetFrameTime();
+
     if (shader.id != 0)
     {
         Vector3 viewVector = { camera3d.position.x - camera3d.target.x, camera3d.position.y - camera3d.target.y, camera3d.position.z - camera3d.target.z };
@@ -933,6 +913,10 @@ void UpdateShaderData()
         SetShaderValue(shader, viewUniform, viewDir, 3);
 
         SetShaderValueMatrix(shader, transformUniform, model.transform);
+
+        float time[1] = { currentTime };
+        SetShaderValue(shader, timeUniformV, time, 1);
+        SetShaderValue(shader, timeUniformF, time, 1);
     }
 }
 
@@ -1029,7 +1013,8 @@ void CompileShader()
         fprintf(vertexFile, vOut);
 
         const char vUniforms[] = 
-        "uniform mat4 mvpMatrix;          \n\n";
+        "uniform mat4 mvpMatrix;            \n"
+        "uniform float vertCurrentTime;   \n\n";
         fprintf(vertexFile, vUniforms);
         
         fprintf(vertexFile, "// Constant and uniform values\n");
@@ -1082,7 +1067,8 @@ void CompileShader()
         fprintf(fragmentFile, "// Uniform attributes\n");
         const char fUniforms[] = 
         "uniform vec3 viewDirection;       \n"
-        "uniform mat4 modelMatrix;       \n\n";
+        "uniform mat4 modelMatrix;         \n"
+        "uniform float fragCurrentTime;  \n\n";
         fprintf(fragmentFile, fUniforms);
 
         fprintf(fragmentFile, "// Output attributes\n");
@@ -1122,6 +1108,8 @@ void CompileShader()
         model.material.shader = shader;
         viewUniform = GetShaderLocation(shader, "viewDirection");
         transformUniform = GetShaderLocation(shader, "modelMatrix");
+        timeUniformV = GetShaderLocation(shader, "vertCurrentTime");
+        timeUniformF = GetShaderLocation(shader, "fragCurrentTime");
     }
 }
 
@@ -1227,8 +1215,8 @@ void CompileNode(FNode node, FILE *file, bool fragment)
                 case 2: sprintf(definition, "    vec2 node_%02i = ", node->id); break;
                 case 3:
                 {
-                    if (fragment) sprintf(definition, "    vec3 node_%02i = ", node->id);
-                    else if (node->type == FNODE_VERTEXPOSITION) sprintf(definition, "    vec4 node_%02i = ", node->id);
+                    if (node->type == FNODE_VERTEXNORMAL) sprintf(definition, "    vec4 node_%02i = ", node->id);
+                    else sprintf(definition, "    vec3 node_%02i = ", node->id);
                 } break;
                 case 4: sprintf(definition, "    vec4 node_%02i = ", node->id); break;
                 case 16: sprintf(definition, "    mat4 node_%02i = ", node->id); break;
@@ -1240,12 +1228,17 @@ void CompileNode(FNode node, FILE *file, bool fragment)
             {
                 switch (node->type)
                 {
+                    case FNODE_TIME:
+                    {
+                        if (fragment) strcat(body, "fragCurrentTime;\n");
+                        else strcat(body, "vertCurrentTime;\n");
+                    } break;
                     case FNODE_VERTEXPOSITION:
                     {
                         if (fragment) strcat(body, "fragPosition;\n");
                         else strcat(body, "vec4(vertexPosition, 1.0);\n");
                     } break;
-                    case FNODE_VERTEXNORMAL: strcat(body, "fragNormal;\n"); break;
+                    case FNODE_VERTEXNORMAL: strcat(body, "vec4(fragNormal, 0.0);\n"); break;
                     case FNODE_FRESNEL: strcat(body, "1 - dot(fragNormal, viewDirection);\n"); break;
                     case FNODE_VIEWDIRECTION: strcat(body, "viewDirection;\n"); break;
                     case FNODE_MVP: strcat(body, "mvpMatrix;\n"); break;
@@ -1269,7 +1262,18 @@ void CompileNode(FNode node, FILE *file, bool fragment)
                     if ((i+1) == node->inputsCount) sprintf(temp, "node_%02i;\n", node->inputs[i]);
                     else
                     {
-                        sprintf(temp, "node_%02i", node->inputs[i]);
+                        int nextIndex = GetNodeIndex(node->inputs[i+1]);
+                        if ((nodes[nextIndex]->output.dataCount - 1) == node->output.dataCount)
+                        {
+                            switch (node->output.dataCount)
+                            {
+                                case 1: sprintf(temp, "vec2(node_%02i, 0.0);\n", node->inputs[i]);
+                                case 2: sprintf(temp, "vec3(node_%02i, 0.0);\n", node->inputs[i]);
+                                case 3: sprintf(temp, "vec4(node_%02i, 0.0);\n", node->inputs[i]);
+                                default: break;
+                            }
+                        }
+                        else sprintf(temp, "node_%02i", node->inputs[i]);
                         switch (node->type)
                         {
                             case FNODE_ADD: strcat(temp, " + "); break;
@@ -1286,7 +1290,7 @@ void CompileNode(FNode node, FILE *file, bool fragment)
             }
             else if (node->type >= FNODE_APPEND)
             {
-                char temp[32] = { '\0' };
+                char temp[64] = { '\0' };
                 switch (node->type)
                 {
                     case FNODE_APPEND:
@@ -1313,6 +1317,19 @@ void CompileNode(FNode node, FILE *file, bool fragment)
                     case FNODE_SQRT: sprintf(temp, "sqrt(node_%02i);\n", node->inputs[0]); break;
                     case FNODE_TRUNC: sprintf(temp, "trunc(node_%02i);\n", node->inputs[0]); break;
                     case FNODE_ROUND: sprintf(temp, "round(node_%02i);\n", node->inputs[0]); break;
+                    case FNODE_VERTEXCOLOR:
+                    {
+                        int index = GetNodeIndex(node->inputs[0]);
+                        switch ((int)nodes[index]->output.data[0].value)
+                        {
+                            case 0: sprintf(temp, (fragment ? "fragColor;\n" : "vertexColor;\n")); break;
+                            case 1: sprintf(temp, (fragment ? "fragColor.r;\n" : "vertexColor.r;\n")); break;
+                            case 2: sprintf(temp, (fragment ? "fragColor.g;\n" : "vertexColor.g;\n")); break;
+                            case 3: sprintf(temp, (fragment ? "fragColor.b;\n" : "vertexColor.b;\n")); break;
+                            case 4: sprintf(temp, (fragment ? "fragColor.a;\n" : "vertexColor.a;\n")); break;
+                            default: break;
+                        }
+                    } break;
                     case FNODE_CEIL: sprintf(temp, "ceil(node_%02i);\n", node->inputs[0]); break;
                     case FNODE_CLAMP01: sprintf(temp, "clamp(node_%02i, 0.0, 1.0);\n", node->inputs[0]); break;
                     case FNODE_EXP2: sprintf(temp, "exp2(node_%02i);\n", node->inputs[0]); break;
@@ -1477,7 +1494,7 @@ void DrawVisor()
 
         Begin3dMode(camera3d);
 
-            DrawModelEx(model, (Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){ 0, 1, 0 }, modelRotation, (Vector3){ 0.13f, 0.13f, 0.13f }, WHITE);
+            DrawModelEx(model, (Vector3){ 0.0f, -0.75f, 0.0f }, (Vector3){ 0, 1, 0 }, modelRotation, (Vector3){ VISOR_MODEL_SCALE, VISOR_MODEL_SCALE, VISOR_MODEL_SCALE }, WHITE);
 
         End3dMode();
 
@@ -1557,7 +1574,8 @@ void DrawInterface()
 
     DrawText("Geometry Data", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Geometry Data", 10))/2 - UI_PADDING_SCROLL/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, 10, WHITE); menuOffset++;
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vertex Position")) CreateNodeUniform(FNODE_VERTEXPOSITION, "Vertex Position", 4);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Normal Direction")) CreateNodeUniform(FNODE_VERTEXNORMAL, "Normal Direction", 3);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Normal Direction")) CreateNodeUniform(FNODE_VERTEXNORMAL, "Normal Direction", 4);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vertex Color")) CreateNodeOperator(FNODE_VERTEXCOLOR, "Vertex Color", 1);
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "View Direction")) CreateNodeUniform(FNODE_VIEWDIRECTION, "View Direction", 3);
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Fresnel")) CreateNodeUniform(FNODE_FRESNEL, "Fresnel", 1);
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "MVP Matrix")) CreateNodeUniform(FNODE_MVP, "MVP Matrix", 16);
@@ -1567,6 +1585,7 @@ void DrawInterface()
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "e")) CreateNodeE();
 
     DrawText("Trigonometry", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Trigonometry", 10))/2 - UI_PADDING_SCROLL/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, 10, WHITE); menuOffset++;
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Current Time")) CreateNodeUniform(FNODE_TIME, "Current Time", 1);
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Cosine")) CreateNodeOperator(FNODE_COS, "Cosine", 1);
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Sine")) CreateNodeOperator(FNODE_SIN, "Sine", 1);
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Tangent")) CreateNodeOperator(FNODE_TAN, "Tangent", 1);
@@ -1595,4 +1614,86 @@ void DrawInterface()
 
         DrawFPS(10, 10);
     }
+}
+
+//----------------------------------------------------------------------------------
+// Program
+//----------------------------------------------------------------------------------
+int main()
+{
+    // Initialization
+    //--------------------------------------------------------------------------------------
+    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
+    InitWindow(screenSize.x, screenSize.y, "fnode 1.0");
+    SetTargetFPS(60);
+    SetLineWidth(3);
+
+    // Load resources
+    model = LoadModel("res/plant.obj");
+    visorTarget = LoadRenderTexture(screenSize.x/4, screenSize.y/4);
+    fxaa = LoadShader("res/fxaa.vs", "res/fxaa.fs");
+
+    // Initialize values
+    camera = (Camera2D){ (Vector2){ 0, 0 }, (Vector2){ screenSize.x/2, screenSize.y/2 }, 0.0f, 1.0f };
+    canvasSize = (Vector2){ screenSize.x*0.85f, screenSize.y };
+    camera3d = (Camera){{ 0.0f, 0.0f, 4.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, 45.0f };
+    menuScrollRec = (Rectangle){ screenSize.x - 17, 5, 9, 30 };
+
+    // Initialize shaders values
+    fxaaUniform = GetShaderLocation(fxaa, "viewportSize");
+    float viewportSize[2] = { screenSize.x/4, screenSize.y/4 };
+    SetShaderValue(fxaa, fxaaUniform, viewportSize, 2);
+
+    // Setup orbital camera
+    SetCameraPosition(camera3d.position);     // Set internal camera position to match our camera position
+    SetCameraTarget(camera3d.target);         // Set internal camera target to match our camera target
+
+    InitFNode();
+    CheckPreviousShader();
+    //--------------------------------------------------------------------------------------
+
+    // Main game loop
+    while (!WindowShouldClose())    // Detect window close button or ESC key
+    {
+        // Update
+        //----------------------------------------------------------------------------------
+        UpdateMouseData();
+        UpdateCanvas();
+        UpdateScroll();
+        UpdateNodesEdit();
+        UpdateNodesDrag();
+        UpdateNodesLink();
+        UpdateCommentCreationEdit();
+        UpdateCommentsEdit();
+        UpdateCommentsDrag();
+        UpdateShaderData();
+
+        if (IsKeyPressed('P')) debugMode = !debugMode;
+        //----------------------------------------------------------------------------------
+
+        // Draw
+        //----------------------------------------------------------------------------------
+        BeginDrawing();
+
+            ClearBackground(RAYWHITE);
+            DrawCanvas();
+            DrawInterface();
+            DrawVisor();
+
+        EndDrawing();
+        //----------------------------------------------------------------------------------
+    }
+
+    // De-Initialization
+    //--------------------------------------------------------------------------------------
+    UnloadRenderTexture(visorTarget);
+    UnloadModel(model);
+    UnloadShader(fxaa);
+    if (loadedShader) UnloadShader(shader);
+
+    CloseFNode();
+    CloseWindow();        // Close window and OpenGL context
+    //--------------------------------------------------------------------------------------
+
+    return 0;
 }
