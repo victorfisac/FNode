@@ -7,7 +7,7 @@
 #include "raygui.h"
 
 // Defines
-#define MAX_INPUTS          4           // Max number of inputs in every node
+#define MAX_INPUTS          8           // Max number of inputs in every node
 #define MAX_VALUES          4           // Max number of values in every output
 #define MAX_NODES           256         // Max number of nodes
 #define MAX_LINES           1024        // Max number of lines
@@ -122,7 +122,6 @@ int main()
         // Update
         //----------------------------------------------------------------------------------
         UpdateMouseInputs();
-        // CalculateValues();
         //----------------------------------------------------------------------------------
 
         // Draw
@@ -135,9 +134,10 @@ int main()
             for (int i = 0; i < nodesCount; i++) DrawNode(nodes[i]);
             for (int i = 0; i < linesCount; i++) DrawNodeLine(lines[i]);
             
-            // Draw interface elements
+            // Draw interface background
             DrawRectangleRec((Rectangle){ menuSize.x, menuSize.y, screenSize.x - menuSize.x, screenSize.y }, DARKGRAY);
             
+            // Draw interface elements
             if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Value")) CreateNodeValue(2.0f);
             if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING), screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector 2")) CreateNodeVector2((Vector2){ 0.0f, 0.0f });
             if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*2, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Vector 3")) CreateNodeVector3((Vector3){ 0.0f, 0.0f, 0.0f });
@@ -146,7 +146,7 @@ int main()
             if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*5, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Subtract")) CreateNodeSubtract();
             if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*6, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Multiply")) CreateNodeMultiply();
             if (GuiButton((Rectangle){ menuSize.x + UI_PADDING, menuSize.y + UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*7, screenSize.x - menuSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Divide")) CreateNodeDivide();
-
+            
         EndDrawing();
         //----------------------------------------------------------------------------------
     }
@@ -187,6 +187,7 @@ void UpdateMouseInputs()
                 if (CheckCollisionPointRec(mousePosition, nodes[i]->shape))
                 {
                     DestroyNode(nodes[i]);
+                    CalculateValues();
                     break;
                 }
             }
@@ -242,6 +243,8 @@ void UpdateMouseInputs()
                         {
                             if (nodes[i]->id == lines[k]->from) DestroyNodeLine(lines[k]);
                         }
+                        
+                        CalculateValues();
                     }
                     else if (CheckCollisionPointRec(mousePosition, nodes[i]->inputShape))
                     {
@@ -249,6 +252,8 @@ void UpdateMouseInputs()
                         {
                             if (nodes[i]->id == lines[k]->to) DestroyNodeLine(lines[k]);
                         }
+                        
+                        CalculateValues();
                     }
                 }
             }
@@ -282,7 +287,7 @@ void UpdateMouseInputs()
                         
                         // Reset linking state values
                         lineState = 0;
-                        UpdateRectangles();
+                        CalculateValues();
                         break;
                     }
                 }
@@ -300,7 +305,85 @@ void UpdateMouseInputs()
 // Calculates nodes output values based on current inputs
 void CalculateValues()
 {
-    // TODO
+    for(int i = 0; i < nodesCount; i++)
+    {
+        if(nodes[i] != NULL)
+        {            
+            // Reset node inputs values and inputs count
+            for(int k = 0; k < MAX_VALUES; k++) nodes[i]->inputs[k] = -1;
+            nodes[i]->inputsCount = 0;
+            
+            // Search for node inputs and calculate inputs count
+            for(int k = 0; k < linesCount; k++)
+            {
+                if(lines[k] != NULL)
+                {
+                    // Check if line output (to) is the node input id
+                    if(lines[k]->to == nodes[i]->id)
+                    {
+                        nodes[i]->inputs[nodes[i]->inputsCount] = lines[k]->from;
+                        nodes[i]->inputsCount++;
+                    }
+                }
+            }
+            
+            // Check if current node is an operator
+            if(nodes[i]->type > FNODE_COLOR)
+            {
+                // Calculate output values count based on first input node value count
+                if(nodes[i]->inputsCount > 0) 
+                {
+                    // Get which index has the first input node id from current nude
+                    int index = -1;
+                    for(int k = 0; k < nodesCount; k++)
+                    {
+                        if(nodes[k]->id == nodes[i]->inputs[0])
+                        {
+                            index = k;
+                            break;
+                        }
+                    }
+                    
+                    if(index != -1) nodes[i]->output = nodes[index]->output;
+                    else TraceLog(2, "FNode: error trying to get inputs from node id %i due to index is out of bounds %i\n", nodes[i]->id, index);
+                    
+                    for(int k = 1; k < nodes[i]->inputsCount; k++)
+                    {
+                        int inputIndex = -1;
+                        for(int j = 0; j < nodesCount; j++)
+                        {
+                            if(nodes[j]->id == nodes[i]->inputs[k])
+                            {
+                                inputIndex = j;
+                                break;
+                            }
+                        }
+                        
+                        if(inputIndex != -1)
+                        {
+                            switch(nodes[i]->type)
+                            {
+                                case FNODE_ADD:
+                                {
+                                    for(int j = 0; j < nodes[i]->output.valuesCount; j++) nodes[i]->output.values[j] += nodes[inputIndex]->output.values[j];
+                                } break;
+                                default: break;
+                            }
+                        }
+                        else TraceLog(2, "FNode: error trying to get node id %i due to index is out of bounds %i\n", nodes[i]->inputs[k], inputIndex);
+                    }
+                }
+                else
+                {
+                    for(int k = 0; k < MAX_VALUES; k++) nodes[i]->output.values[k] = 0.0f;
+                    nodes[i]->output.valuesCount = 0;
+                }
+            }
+        }
+        else TraceLog(1, "FNode: error trying to calculate values for a null referenced node\n");
+    }
+    
+    UpdateRectangles();
 }
 
 // Updates node shapes due to drag behaviour
@@ -427,10 +510,7 @@ FNode InitializeNode()
     else TraceLog(1, "FNode: node creation failed because there is any available id\n");
     
     // Initialize node inputs and inputs count
-    for (int i = 0; i < MAX_INPUTS; i++)
-    {
-        for (int k = 0; k < MAX_VALUES; k++) newNode->inputs[i] = -1;
-    }
+    for (int i = 0; i < MAX_INPUTS; i++) newNode->inputs[i] = -1;
     newNode->inputsCount = 0;
     
     // Initialize node output and output values count
@@ -525,9 +605,12 @@ void DrawNode(FNode node)
         "id: %i\n"
         "type: %i\n"
         "name: %s\n"
+        "inputs: %i, %i, %i, %i, %i, %i, %i, %i (count: %i)\n"
+        "output: %.02f, %.02f, %.02f, %.02f (count: %i)\n"
         "shape: %i %i, %i, %i";
         
-        DrawText(FormatText(string, node->id, node->type, node->name, node->shape.x, node->shape.y, node->shape.width, node->shape.height), 10, 10 + 75*node->id, 10, BLACK);
+        DrawText(FormatText(string, node->id, node->type, node->name, node->inputs[0], node->inputs[1], node->inputs[2], node->inputs[3], node->inputs[4], 
+        node->inputs[5], node->inputs[6], node->inputs[7], node->inputsCount, node->output.values[0], node->output.values[1], node->output.values[2], node->output.values[3], node->output.valuesCount, node->shape.x, node->shape.y, node->shape.width, node->shape.height), 10, 10 + 100*node->id, 10, BLACK);
     }
     else TraceLog(1, "FNode: error trying to draw a null referenced node\n");
 }
@@ -575,7 +658,7 @@ void DrawNodeLine(FLine line)
             }
             else to = mousePosition;
         }
-        else TraceLog(1, "FNode: error when trying to find node id %i index (result: %i)\n", line->from, indexFrom);
+        else TraceLog(1, "FNode: error when trying to find node id %i due to index is out of bounds %i\n", line->from, indexFrom);
         
         DrawLine(from.x, from.y, to.x, to.y, BLACK);
                 
@@ -624,6 +707,8 @@ void DestroyNode(FNode node)
             
             usedMemory -= sizeof(FNodeData);
             TraceLog(2, "FNode: destroyed node id %i (index: %i) [USED RAM: %i bytes]\n", id, index, usedMemory);
+            
+            CalculateValues();
         }
         else TraceLog(1, "FNode: error when trying to destroy node id %i (index: %i)\n", id, index);
     }
@@ -660,8 +745,10 @@ void DestroyNodeLine(FLine line)
             
             usedMemory -= sizeof(FNodeLine);
             TraceLog(2, "FNode: destroyed line id %i (index: %i) [USED RAM: %i bytes]\n", id, index, usedMemory);
+            
+            CalculateValues();
         }
-        else TraceLog(1, "FNode: error when trying to destroy line id %i (index: %i)\n", id, index);
+        else TraceLog(1, "FNode: error when trying to destroy line id %i due to index is out of bounds %i\n", id, index);
     }
     else TraceLog(1, "FNode: error trying to destroy a null referenced line\n");
 }
