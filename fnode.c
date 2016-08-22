@@ -1,40 +1,44 @@
 /*
-    ---------- TODO LIST ----------
-    - Find a solution to move nodes that are in comment shape
-    - Implement curved node lines
+    ----------------- TODO LIST -----------------
+    - Fix mouse inputs conflicts between different input features
+    - Add remaining operator nodes
+    - Create main node
+    
 */
 
 #include <stdlib.h>         // Required for: malloc(), free(), atof()
 #include <stdio.h>          // Required for: fprintf(), sprintf()
 #include <math.h>           // Required for: cos(), sin(), sqrt(), pow(), floor()
 #include <stdarg.h>         // Required for: va_list, va_start(), vfprintf(), va_end()
-#include "raylib.h"         // Required for window management, 2D camera drawing and inputs detection
+#include <raylib.h>         // Required for window management, 2D camera drawing and inputs detection
 
 // Defines
 #define     MAX_INPUTS                  8               // Max number of inputs in every node
 #define     MAX_VALUES                  4               // Max number of values in every output
 #define     MAX_NODES                   256             // Max number of nodes
 #define     MAX_NODE_LENGTH             16              // Max node output data value text length
-#define     MAX_LINES                   1024            // Max number of lines
+#define     MAX_LINES                   2048            // Max number of lines (8 lines for each node)
 #define     MAX_COMMENTS                64              // Max number of comments
 #define     MAX_COMMENT_LENGTH          20              // Max comment value text length
 #define     MIN_COMMENT_SIZE            75              // Min comment width and height values
+#define     NODE_LINE_DIVISIONS         20              // Node curved line divisions
 #define     NODE_DATA_WIDTH             30              // Node data text width
 #define     NODE_DATA_HEIGHT            30              // Node data text height
 #define     UI_PADDING                  5               // Interface bounds padding with background
 #define     UI_BUTTON_HEIGHT            30              // Interface bounds height
-#define     UI_SCROLL                   10              // Interface scroll sensitivity
+#define     UI_SCROLL                   20              // Interface scroll sensitivity
 #define     UI_GRID_SPACING             25              // Interface canvas background grid divisions length
 #define     UI_GRID_ALPHA               0.25f           // Interface canvas background grid lines alpha
-#define     UI_GRID_COUNT               500             // Interface canvas background grid divisions count
+#define     UI_GRID_COUNT               100             // Interface canvas background grid divisions count
 #define     UI_COMMENT_WIDTH            220             // Interface comment text box width
 #define     UI_COMMENT_HEIGHT           25              // Interface comment text box height
-
-#define     UI_BUTTON_DEFAULT_COLOR     LIGHTGRAY       // Interface button background color     
-#define     UI_BORDER_DEFAULT_COLOR     125             // Interface button border color     
+#define     UI_BUTTON_DEFAULT_COLOR     LIGHTGRAY       // Interface button background color
+#define     UI_BORDER_DEFAULT_COLOR     125             // Interface button border color
 
 // Enums
 typedef enum {
+    FNODE_PI = -2,
+    FNODE_E,
     FNODE_VALUE,
     FNODE_VECTOR2,
     FNODE_VECTOR3,
@@ -115,6 +119,7 @@ typedef struct FLineData {
 typedef struct FCommentData {
     unsigned int id;                        // Comment unique identifier
     char *value;                            // Comment text label value
+    
     Rectangle shape;                        // Comment rectangle data
     Rectangle valueShape;                   // Comment label rectangle data 
     Rectangle sizeTShape;                   // Comment top size edit rectangle data
@@ -149,6 +154,9 @@ int selectedComment = -1;                   // Current selected comment to drag 
 int editSize = -1;                          // Current edited comment
 int editSizeType = -1;                      // Current edited comment size (0 = top, 1 = bottom, 2 = left, 3 = right, 4 = top-left, 5 = top-right, 6 = bottom-left, 7 = bottom-right)
 int editComment = -1;                       // Current edited comment value
+int selectedCommentNodes[MAX_NODES];        // Current selected comment nodes ids list to drag
+int selectedCommentNodesCount;              // Current selected comment nodes ids list count
+
 FComment tempComment = NULL;                // Temporally created comment during comment states
 Vector2 tempCommentPos = { 0, 0 };          // Temporally created comment start position
 
@@ -162,7 +170,7 @@ bool debugMode = false;                     // Drawing debug information state
 Camera2D camera;                            // Node area 2d camera for panning
 Vector2 canvasSize;                         // Interface screen size
 float menuScroll = 10.0f;                   // Current interface scrolling amount
-Vector2 scrollLimits = { 10, 475 };         // Interface scrolling limits
+Vector2 scrollLimits = { 10, 580 };         // Interface scrolling limits
 
 // Functions declarations
 void UpdateMouseData();                     // Updates current mouse position and delta position
@@ -219,6 +227,8 @@ FNode CreateNodeMax();                                      // Creates a node to
 FNode CreateNodeMin();                                      // Creates a node to calculate the lower value of all inputs values
 FNode CreateNodeNoise();                                    // Creates a node to calculate random values between input range
 FNode CreateNodeNoiseInt();                                 // Creates a node to calculate integer random values between input range
+FNode CreateNodePI();                                       // Creates a node which returns PI value
+FNode CreateNodeE();                                        // Creates a node which returns e value
 FNode InitializeNode(bool isOperator);                      // Initializes a new node with generic parameters
 FLine CreateNodeLine();                                     // Creates a line between two nodes
 FComment CreateComment();                                   // Creates a comment
@@ -251,6 +261,8 @@ float FClamp(float value, float min, float max);            // Returns a value c
 float FTrunc(float value);                                  // Returns a truncated value of a value
 float FRound(float value);                                  // Returns a rounded value of a value
 float FCeil(float value);                                   // Returns a rounded up to the nearest integer of a value
+float FEaseLinear(float t, float b, float c, float d);  // Returns an ease linear value between two parameters 
+float FEaseInOutQuad(float t, float b, float c, float d);   // Returns an ease quadratic in-out value between two parameters
 void FStringToFloat(float *pointer, const char *string);    // Sends a float conversion value of a string to an initialized float pointer
 void FFloatToString(char *buffer, float value);             // Sends formatted output to an initialized string pointer
 
@@ -259,7 +271,8 @@ int main()
     // Initialization
     //--------------------------------------------------------------------------------------
     SetConfigFlags(FLAG_MSAA_4X_HINT);
-    InitWindow(screenSize.x, screenSize.y, "fnode 0.2");
+    InitWindow(screenSize.x, screenSize.y, "fnode 0.3");
+    SetLineWidth(3);
     SetTargetFPS(60);
     
     // Initialize values
@@ -734,11 +747,22 @@ void UpdateCommentDrag()
                     {
                         selectedComment = comments[i]->id;
                         currentOffset = (Vector2){ mousePosition.x - comments[i]->shape.x, mousePosition.y - comments[i]->shape.y };
+                        
+                        for (int k = 0; k < nodesCount; k++)
+                        {
+                            if (CheckCollisionRecs(CameraToViewRec(comments[i]->shape, camera), CameraToViewRec(nodes[k]->shape, camera)))
+                            {
+                                selectedCommentNodes[selectedCommentNodesCount] = nodes[k]->id;
+                                selectedCommentNodesCount++;
+                                
+                                if (selectedCommentNodesCount > MAX_NODES) break;
+                            }
+                        }
+                        
                         break;
                     }
                 }
             }
-            
         }
         else if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON))
         {
@@ -762,11 +786,32 @@ void UpdateCommentDrag()
                 comments[i]->shape.y = mousePosition.y - currentOffset.y;
                 
                 UpdateCommentShapes(comments[i]);
+                
+                for (int k = 0; k < selectedCommentNodesCount; k++)
+                {
+                    for (int j = 0; j < nodesCount; j++)
+                    {
+                        if (nodes[j]->id == selectedCommentNodes[k])
+                        {
+                            nodes[j]->shape.x += mouseDelta.x;
+                            nodes[j]->shape.y += mouseDelta.y;
+                            
+                            UpdateNodeShapes(nodes[j]);
+                            break;
+                        }
+                    }
+                }
                 break;
             }
         }
         
-        if (IsMouseButtonUp(MOUSE_LEFT_BUTTON)) selectedComment = -1;
+        if (IsMouseButtonUp(MOUSE_LEFT_BUTTON))
+        {
+            selectedComment = -1;
+            
+            for (int i = 0; i < selectedCommentNodesCount; i++) selectedCommentNodes[i] = -1;
+            selectedCommentNodesCount = 0;
+        }
     }
 }
 
@@ -779,7 +824,7 @@ void UpdateNodeEdit()
         int data = -1;
         for (int i = 0; i < nodesCount; i++)
         {
-            if (nodes[i]->type <= FNODE_VECTOR4)
+            if ((nodes[i]->type >= FNODE_VALUE) && (nodes[i]->type <= FNODE_VECTOR4))
             {
                 for (int k = 0; k < nodes[i]->output.dataCount; k++)
                 {
@@ -1404,6 +1449,7 @@ void ClearUnusedNodes()
 void ClearGraph()
 {
     for (int i = nodesCount - 1; i >= 0; i--) DestroyNode(nodes[i]);
+    for (int i = commentsCount - 1; i >= 0; i--) DestroyComment(comments[i]);
     
     if (usedMemory != 0) TraceLogFNode(true, "all nodes have been deleted by there are still memory in use [USED RAM: %i bytes]", usedMemory);
     else TraceLogFNode(false, "all nodes have been deleted [USED RAM: %i bytes]", usedMemory);
@@ -1411,7 +1457,7 @@ void ClearGraph()
 
 // Draw canvas space to create nodes
 void DrawCanvas()
-{
+{    
     // Draw background title and credits
     DrawText("FNODE 1.0", (canvasSize.x - MeasureText("FNODE 1.0", 120))/2, canvasSize.y/2 - 60, 120, Fade(LIGHTGRAY, UI_GRID_ALPHA*2));
     DrawText("VICTOR FISAC", (canvasSize.x - MeasureText("VICTOR FISAC", 40))/2, canvasSize.y*0.65f - 20, 40, Fade(LIGHTGRAY, UI_GRID_ALPHA*2));
@@ -1422,7 +1468,7 @@ void DrawCanvas()
         
         // Draw all created comments, lines and nodes
         for (int i = 0; i < commentsCount; i++) DrawComment(comments[i]);
-        for (int i = 0; i < nodesCount; i++) DrawNode(nodes[i]);
+        for (int i = 0; i < nodesCount; i++) DrawNode(nodes[i]);        
         for (int i = 0; i < linesCount; i++) DrawNodeLine(lines[i]);
         
     End2dMode();
@@ -1434,31 +1480,21 @@ void DrawCanvasGrid(int divisions)
     int spacing = 0;
     for (int i = 0; i < divisions; i++)
     {
-        DrawLine(-(divisions/2*UI_GRID_SPACING*5) + spacing, -100000, -(divisions/2*UI_GRID_SPACING*5) + spacing, 100000, Fade(BLACK, UI_GRID_ALPHA*2)); 
-        spacing += UI_GRID_SPACING;
-        DrawLine(-(divisions/2*UI_GRID_SPACING*5) + spacing, -100000, -(divisions/2*UI_GRID_SPACING*5) + spacing, 100000, Fade(GRAY, UI_GRID_ALPHA));
-        spacing += UI_GRID_SPACING;
-        DrawLine(-(divisions/2*UI_GRID_SPACING*5) + spacing, -100000, -(divisions/2*UI_GRID_SPACING*5) + spacing, 100000, Fade(GRAY, UI_GRID_ALPHA));
-        spacing += UI_GRID_SPACING;
-        DrawLine(-(divisions/2*UI_GRID_SPACING*5) + spacing, -100000, -(divisions/2*UI_GRID_SPACING*5) + spacing, 100000, Fade(GRAY, UI_GRID_ALPHA));
-        spacing += UI_GRID_SPACING;
-        DrawLine(-(divisions/2*UI_GRID_SPACING*5) + spacing, -100000, -(divisions/2*UI_GRID_SPACING*5) + spacing, 100000, Fade(GRAY, UI_GRID_ALPHA));
-        spacing += UI_GRID_SPACING;
+        for (int k = 0; k < 5; k++)
+        {
+            DrawRectangle(-(divisions/2*UI_GRID_SPACING*5) + spacing, -100000, 1, 200000, ((k == 0) ? Fade(BLACK, UI_GRID_ALPHA*2) : Fade(GRAY, UI_GRID_ALPHA)));
+            spacing += UI_GRID_SPACING;
+        }
     }
     
     spacing = 0;
     for (int i = 0; i < divisions; i++)
     {
-        DrawLine(-100000, -(divisions/2*UI_GRID_SPACING*5) + spacing, 100000, -(divisions/2*UI_GRID_SPACING*5) + spacing, Fade(BLACK, UI_GRID_ALPHA*2));
-        spacing += UI_GRID_SPACING;
-        DrawLine(-100000, -(divisions/2*UI_GRID_SPACING*5) + spacing, 100000, -(divisions/2*UI_GRID_SPACING*5) + spacing, Fade(GRAY, UI_GRID_ALPHA));
-        spacing += UI_GRID_SPACING;
-        DrawLine(-100000, -(divisions/2*UI_GRID_SPACING*5) + spacing, 100000, -(divisions/2*UI_GRID_SPACING*5) + spacing, Fade(GRAY, UI_GRID_ALPHA));
-        spacing += UI_GRID_SPACING;
-        DrawLine(-100000, -(divisions/2*UI_GRID_SPACING*5) + spacing, 100000, -(divisions/2*UI_GRID_SPACING*5) + spacing, Fade(GRAY, UI_GRID_ALPHA));
-        spacing += UI_GRID_SPACING;
-        DrawLine(-100000, -(divisions/2*UI_GRID_SPACING*5) + spacing, 100000, -(divisions/2*UI_GRID_SPACING*5) + spacing, Fade(GRAY, UI_GRID_ALPHA));
-        spacing += UI_GRID_SPACING;
+        for (int k = 0; k < 5; k++)
+        {
+            DrawRectangle(-100000, -(divisions/2*UI_GRID_SPACING*5) + spacing, 200000, 1, ((k == 0) ? Fade(BLACK, UI_GRID_ALPHA*2) : Fade(GRAY, UI_GRID_ALPHA)));
+            spacing += UI_GRID_SPACING;
+        }
     }
 }
 
@@ -1505,12 +1541,16 @@ void DrawInterface()
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*26 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Append")) CreateNodeAppend();
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*27 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Normalize")) CreateNodeNormalize();
     
-    DrawText("Trigonometry", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Trigonometry", 10))/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*28 - menuScroll, 10, WHITE);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*29 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Cosine")) CreateNodeCos();
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*30 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Sine")) CreateNodeSin();
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*31 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Tangent")) CreateNodeTan();
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*32 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Deg to Rad")) CreateNodeDeg2Rad();
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*33 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Rad to Deg")) CreateNodeRad2Deg();
+    DrawText("Math Constants", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Math Constants", 10))/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*28 - menuScroll, 10, WHITE);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*29 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "PI")) CreateNodePI();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*30 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "e")) CreateNodeE();
+
+    DrawText("Trigonometry", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Trigonometry", 10))/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*31 - menuScroll, 10, WHITE);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*32 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Cosine")) CreateNodeCos();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*33 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Sine")) CreateNodeSin();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*34 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Tangent")) CreateNodeTan();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*35 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Deg to Rad")) CreateNodeDeg2Rad();
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*36 - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2, UI_BUTTON_HEIGHT }, "Rad to Deg")) CreateNodeRad2Deg();
     
     if (debugMode)
     {
@@ -1547,6 +1587,8 @@ void InitFNode()
     nodesCount = 0;
     linesCount = 0;
     commentsCount = 0;
+    selectedCommentNodesCount = 0;
+    for (int i = 0; i < MAX_NODES; i++) selectedCommentNodes[i] = -1;
     
     TraceLogFNode(false, "initialization complete");
 }
@@ -1979,6 +2021,40 @@ FNode CreateNodeNoiseInt()
     return newNode;
 }
 
+// Creates a node which returns PI value
+FNode CreateNodePI()
+{
+    FNode newNode = InitializeNode(false);
+    
+    newNode->type = FNODE_PI;
+    newNode->name = "PI";
+    newNode->output.dataCount = 1;
+    newNode->output.data[0].value = PI;
+    FFloatToString(newNode->output.data[0].valueText, newNode->output.data[0].value);
+    newNode->inputsLimit = 0;
+    
+    UpdateNodeShapes(newNode);
+    
+    return newNode;
+}
+
+// Creates a node which returns e value
+FNode CreateNodeE()
+{
+    FNode newNode = InitializeNode(false);
+    
+    newNode->type = FNODE_PI;
+    newNode->name = "e";
+    newNode->output.dataCount = 1;
+    newNode->output.data[0].value = 2.71828182845904523536;
+    FFloatToString(newNode->output.data[0].valueText, newNode->output.data[0].value);
+    newNode->inputsLimit = 0;
+    
+    UpdateNodeShapes(newNode);
+    
+    return newNode;
+}
+
 // Initializes a new node with generic parameters
 FNode InitializeNode(bool isOperator)
 {
@@ -2167,7 +2243,7 @@ void DrawNode(FNode node)
         DrawRectangleLines(node->shape.x, node->shape.y, node->shape.width, node->shape.height, BLACK);
         DrawText(FormatText("%s [ID: %i]", node->name, node->id), node->shape.x + node->shape.width/2 - MeasureText(FormatText("%s [ID: %i]", node->name, node->id), 10)/2, node->shape.y - 15, 10, BLACK);
         
-        if (node->type <= FNODE_VECTOR4)
+        if ((node->type >= FNODE_VALUE) && (node->type <= FNODE_VECTOR4))
         {
             if (node->id == editNode)
             {
@@ -2240,7 +2316,7 @@ void DrawNode(FNode node)
         
         for (int i = 0; i < node->output.dataCount; i++)
         {
-            if (node->type <= FNODE_VECTOR4) DrawRectangleLines(node->output.data[i].shape.x,node->output.data[i].shape.y, node->output.data[i].shape.width, node->output.data[i].shape.height, (((editNode == node->id) && (editNodeType == i)) ? BLACK : GRAY));
+            if ((nodes[i]->type >= FNODE_VALUE) && (nodes[i]->type <= FNODE_VECTOR4)) DrawRectangleLines(node->output.data[i].shape.x,node->output.data[i].shape.y, node->output.data[i].shape.width, node->output.data[i].shape.height, (((editNode == node->id) && (editNodeType == i)) ? BLACK : GRAY));
             DrawText(node->output.data[i].valueText, node->output.data[i].shape.x + (node->output.data[i].shape.width - 
                      MeasureText(node->output.data[i].valueText, 20))/2, node->output.data[i].shape.y + 
                      node->output.data[i].shape.height/2 - 9, 20, DARKGRAY);
@@ -2319,9 +2395,59 @@ void DrawNodeLine(FLine line)
         }
         else TraceLogFNode(true, "error when trying to find node id %i due to index is out of bounds %i", line->from, indexFrom);
         
-        DrawLine(from.x, from.y, to.x, to.y, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
         DrawCircle(from.x, from.y, 5, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
         DrawCircle(to.x, to.y, 5, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
+        
+        if (from.x <= to.x)
+        {
+            int current = 0;        
+            while (current < NODE_LINE_DIVISIONS) 
+            {
+                Vector2 fromCurve = { 0, 0 };
+                fromCurve.x = FEaseLinear(current, from.x, to.x - from.x, NODE_LINE_DIVISIONS);
+                fromCurve.y = FEaseInOutQuad(current, from.y, to.y - from.y, NODE_LINE_DIVISIONS);
+                current++;
+                
+                Vector2 toCurve = { 0, 0 };
+                toCurve.x = FEaseLinear(current, from.x, to.x - from.x, NODE_LINE_DIVISIONS);
+                toCurve.y = FEaseInOutQuad(current, from.y, to.y - from.y, NODE_LINE_DIVISIONS);
+                
+                DrawLine(fromCurve.x, fromCurve.y, toCurve.x, toCurve.y, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
+            }
+        }
+        else
+        {
+            int x = 0.0f;
+            int y = 0.0f;
+            float angle = -90.0f;
+            float multiplier = (((to.y - from.y) > 0) ? 1 : -1);
+            float radius = (fabs(to.y - from.y)/4 + 0.02f)*multiplier;
+            float distance = FClamp(fabs(to.x - from.x)/100, 0.0f, 1.0f);
+            
+            DrawLine(from.x, from.y, from.x, from.y, BLACK);
+            
+            while (angle < 90)
+            {
+                DrawLine(from.x + cos(angle*DEG2RAD)*radius*multiplier*distance, from.y + radius + sin(angle*DEG2RAD)*radius, from.x + cos((angle + 10)*DEG2RAD)*radius*multiplier*distance, from.y + radius + sin((angle + 10)*DEG2RAD)*radius, BLACK);
+                angle += 10;
+            }
+            
+            Vector2 lastPosition = { from.x, from.y + radius*2 };
+            
+            DrawLine(lastPosition.x, lastPosition.y, to.x + cos(270*DEG2RAD)*radius*multiplier, to.y - radius + sin(270*DEG2RAD)*radius, BLACK);
+            
+            lastPosition.x = to.x;
+            
+            while (angle < 270)
+            {
+                DrawLine(to.x + cos(angle*DEG2RAD)*radius*multiplier*distance, to.y - radius + sin(angle*DEG2RAD)*radius, to.x + cos((angle + 10)*DEG2RAD)*radius*multiplier*distance, to.y - radius + sin((angle + 10)*DEG2RAD)*radius, BLACK);
+                angle += 10;
+            }
+            
+            lastPosition.y = lastPosition.y + radius*2;
+            
+            DrawLine(to.x, to.y, to.x, to.y, BLACK);
+        }
         
         if (indexFrom != -1 && indexTo != -1)
         {
@@ -2674,6 +2800,8 @@ void CloseFNode()
     nodesCount = 0;
     linesCount = 0;
     commentsCount = 0;
+    selectedCommentNodesCount = 0;
+    for (int i = 0; i < MAX_NODES; i++) selectedCommentNodes[i] = -1;
     
     TraceLogFNode(false, "unitialization complete [USED RAM: %i bytes]", usedMemory);
 }
@@ -2734,13 +2862,7 @@ Vector4 FVector4Normalize(Vector4 v)
 
 // Returns a value to the power of an exponent
 float FPower(float value, float exp)
-{
-    /*float output = value;
-    
-    for (int i = 1; i < exp; i++) output *= output;
-    
-    return output;*/
-    
+{    
     return (float)pow(value, exp);
 }
 
@@ -2800,6 +2922,28 @@ float FCeil(float value)
     if (output != (float)truncated) output = (float)((output >= 0) ? (truncated + 1) : truncated);
 
     return output;
+}  
+
+// Returns an ease linear value between two parameters
+float FEaseLinear(float t, float b, float c, float d)
+{ 
+    return (float)(c*t/d + b); 
+}
+
+// Returns an ease quadratic in-out value between two parameters
+float FEaseInOutQuad(float t, float b, float c, float d)
+{
+    float output = 0.0f;
+    
+	t /= d/2;
+	if (t < 1) output = (float)(c/2*t*t + b);
+    else
+    {
+        t--;
+        output = (float)(-c/2*(t*(t-2) - 1) + b);
+    }
+    
+	return output;
 }
 
 // Sends a float conversion value of a string to an initialized float pointer
