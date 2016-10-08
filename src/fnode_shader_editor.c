@@ -26,24 +26,31 @@
 //----------------------------------------------------------------------------------
 // Includes
 //----------------------------------------------------------------------------------
-#include "fnode.h"      // Required for FNode framework functions
+#define FNODE_IMPLEMENTATION
+#include "fnode.h"
 
 //----------------------------------------------------------------------------------
 // Defines and Macros
 //----------------------------------------------------------------------------------
-#define     UI_PADDING                  5                       // Interface bounds padding with background
-#define     UI_PADDING_SCROLL           20                      // Interface scroll bar padding
-#define     UI_BUTTON_HEIGHT            30                      // Interface bounds height
-#define     UI_SCROLL                   20                      // Interface scroll sensitivity
-#define     UI_GRID_ALPHA               0.25f                   // Interface canvas background grid lines alpha
-#define     VISOR_MODEL_SCALE           11.0f                   // Visor model scale
-#define     VISOR_MODEL_ROTATION        0.01f                   // Visor model rotation speed
-#define     VISOR_BORDER                2                       // Visor window border width
-#define     VERTEX_PATH                 "output/shader.vs"      // Vertex shader output path
-#define     FRAGMENT_PATH               "output/shader.fs"      // Fragment shader output path
-#define     DATA_PATH                   "output/shader.fnode"   // Shader data output path
-#define     MAX_TEXTURES                30                      // Shader maximum texture units
-#define     COMPILE_DURATION            120                     // Shader compile result duration
+#define     UI_PADDING                  5                               // Interface bounds padding with background
+#define     UI_PADDING_SCROLL           20                              // Interface scroll bar padding
+#define     UI_BUTTON_HEIGHT            30                              // Interface bounds height
+#define     UI_SCROLL                   20                              // Interface scroll sensitivity
+#define     UI_GRID_ALPHA               0.25f                           // Interface canvas background grid lines alpha
+#define     VISOR_MODEL_SCALE           11.0f                           // Visor model scale
+#define     VISOR_MODEL_ROTATION        0.2f                            // Visor model rotation speed
+#define     VISOR_BORDER                2                               // Visor window border width
+#define     VERTEX_PATH                 "output/shader.vs"              // Vertex shader output path
+#define     FRAGMENT_PATH               "output/shader.fs"              // Fragment shader output path
+#define     DATA_PATH                   "output/shader.fnode"           // Shader data output path
+#define     MAX_TEXTURES                30                              // Shader maximum texture units
+#define     COMPILE_DURATION            120                             // Shader compile result duration
+#define     MODEL_PATH                  "res/meshes/plant.obj"          // Example model file path
+#define     MODEL_TEXTURE_DIFFUSE       "res/textures/plant.tga"        // Example model diffuse texture file path
+#define     MODEL_TEXTURE_WINDAMOUNT    "res/textures/plant_vc.tga"     // Example model diffuse wind amount texture file path
+#define     FXAA_VERTEX                 "res/shaders/fxaa.vs"           // Visor FXAA vertex shader path
+#define     FXAA_FRAGMENT               "res/shaders/fxaa.fs"           // Visor FXAA fragment shader path
+#define     FXAA_SCREENSIZE_UNIFORM     "viewportSize"                  // Visor FXAA shader screen size uniform location name
 
 //----------------------------------------------------------------------------------
 // Global Variables
@@ -91,7 +98,6 @@ int compileFrame = 0;                       // Compile time frames count
 void CheckPreviousShader();                                 // Check if there are a compatible shader in output folder
 void UpdateMouseData();                                     // Updates current mouse position and delta position
 void UpdateInputsData();                                    // Updates current inputs states
-void UpdateCanvas();                                        // Updates canvas space target and offset
 void UpdateScroll();                                        // Updates mouse scrolling for menu and canvas drag
 void UpdateNodesEdit();                                     // Check node data values edit input
 void UpdateNodesDrag();                                     // Check node drag input
@@ -249,7 +255,7 @@ void CheckPreviousShader()
         }
         else TraceLogFNode(false, "error when trying to open previous shader data file");
     }
-    
+
     if (!loadedShader)
     {
         CreateNodeMaterial(FNODE_VERTEX, "[OUTPUT] Vertex Position", 0);
@@ -270,25 +276,17 @@ void UpdateMouseData()
 void UpdateInputsData()
 {
     // if (IsKeyPressed('P')) debugMode = !debugMode;
+
     if (IsKeyPressed('H')) help = !help;
     else if (IsKeyPressed(KEY_RIGHT_ALT))
     {
         fullVisor = !fullVisor;
         UnloadRenderTexture(visorTarget);
         visorTarget = LoadRenderTexture((fullVisor ? screenSize.x : (screenSize.x/4)), (fullVisor ? screenSize.y : (screenSize.y/4)));
-        
-        if (!fullVisor) camera3d = (Camera){{ 0.0f, 0.0f, 4.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, 45.0f };
     }
-}
 
-// Updates canvas space target and offset
-void UpdateCanvas()
-{
     // Update canvas camera values
     camera.target = mousePosition;
-
-    // Update visor model current rotation
-    modelRotation -= VISOR_MODEL_ROTATION;
 }
 
 // Updates mouse scrolling for menu and canvas drag
@@ -941,6 +939,9 @@ void UpdateShaderData()
 {
     currentTime += GetFrameTime();
     framesCounter++;
+    
+    // Update visor model current rotation
+    modelRotation -= VISOR_MODEL_ROTATION;
     
     if (compileState >= 0)
     {
@@ -1711,51 +1712,35 @@ void DrawCanvasGrid(int divisions)
 // Draws a visor with default model rotating and current shader
 void DrawVisor()
 {
+    BeginTextureMode(visorTarget);
+    
+        DrawRectangle(0, 0, screenSize.x, screenSize.y, GRAY);
+
+        Begin3dMode(camera3d);
+
+            DrawModelEx(model, (Vector3){ 0.0f, -1.0f, 0.0f }, (Vector3){ 0, 1, 0 }, modelRotation, (Vector3){ VISOR_MODEL_SCALE, VISOR_MODEL_SCALE, VISOR_MODEL_SCALE }, RED);
+
+        End3dMode();
+
+    EndTextureMode();
+
+    Rectangle visor = { canvasSize.x - visorTarget.texture.width - UI_PADDING, screenSize.y - visorTarget.texture.height - UI_PADDING, visorTarget.texture.width, visorTarget.texture.height };
+    
     if (fullVisor)
     {
-        BeginTextureMode(visorTarget);
-        
-            DrawRectangle(0, 0, screenSize.x, screenSize.y, BLACK);
-
-            Begin3dMode(camera3d);
-            
-                DrawGrid(10, 1.0f);
-
-                DrawModelEx(model, (Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){ 0, 1, 0 }, modelRotation, (Vector3){ VISOR_MODEL_SCALE, VISOR_MODEL_SCALE, VISOR_MODEL_SCALE }, RED);
-
-            End3dMode();
-
-        EndTextureMode();
-
-        BeginShaderMode(fxaa);
-
-            DrawTexturePro(visorTarget.texture, (Rectangle){ 0, 0, visorTarget.texture.width, -visorTarget.texture.height }, (Rectangle){ 0, 0, screenSize.x, screenSize.y }, (Vector2){ 0, 0 }, 0.0f, WHITE);
-
-        EndShaderMode();
+        visor.x = 0;
+        visor.y = 0;
+        visor.width = screenSize.x;
+        visor.height = screenSize.y;
     }
-    else
-    {
-        BeginTextureMode(visorTarget);
-        
-            DrawRectangle(0, 0, screenSize.x, screenSize.y, GRAY);
+    
+    DrawRectangle(visor.x - VISOR_BORDER, visor.y - VISOR_BORDER, visor.width + VISOR_BORDER*2, visor.height + VISOR_BORDER*2, BLACK);
 
-            Begin3dMode(camera3d);
+    BeginShaderMode(fxaa);
 
-                DrawModelEx(model, (Vector3){ 0.0f, -1.0f, 0.0f }, (Vector3){ 0, 1, 0 }, modelRotation, (Vector3){ VISOR_MODEL_SCALE, VISOR_MODEL_SCALE, VISOR_MODEL_SCALE }, RED);
+        DrawTexturePro(visorTarget.texture, (Rectangle){ 0, 0, visorTarget.texture.width, -visorTarget.texture.height }, visor, (Vector2){ 0, 0 }, 0.0f, WHITE);
 
-            End3dMode();
-
-        EndTextureMode();
-
-        Rectangle visor = { canvasSize.x - visorTarget.texture.width - UI_PADDING, screenSize.y - visorTarget.texture.height - UI_PADDING, visorTarget.texture.width, visorTarget.texture.height };
-        DrawRectangle(visor.x - VISOR_BORDER, visor.y - VISOR_BORDER, visor.width + VISOR_BORDER*2, visor.height + VISOR_BORDER*2, BLACK);
-
-        BeginShaderMode(fxaa);
-
-            DrawTexturePro(visorTarget.texture, (Rectangle){ 0, 0, visorTarget.texture.width, -visorTarget.texture.height }, visor, (Vector2){ 0, 0 }, 0.0f, WHITE);
-
-        EndShaderMode();
-    }
+    EndShaderMode();
 }
 
 // Draw interface to create nodes
@@ -1966,11 +1951,11 @@ int main()
     SetLineWidth(3);
 
     // Load resources
-    model = LoadModel("res/meshes/plant.obj");
+    model = LoadModel(MODEL_PATH);
     visorTarget = LoadRenderTexture(screenSize.x/4, screenSize.y/4);
-    fxaa = LoadShader("res/shaders/fxaa.vs", "res/shaders/fxaa.fs");
-    textures[0] = LoadTexture("res/textures/plant_vc.tga");
-    textures[1] = LoadTexture("res/textures/plant.tga");
+    fxaa = LoadShader(FXAA_VERTEX, FXAA_FRAGMENT);
+    textures[0] = LoadTexture(MODEL_TEXTURE_WINDAMOUNT);
+    textures[1] = LoadTexture(MODEL_TEXTURE_DIFFUSE);
     model.material.texDiffuse = textures[0];
     model.material.texNormal = textures[1];
 
@@ -1981,7 +1966,7 @@ int main()
     menuScrollRec = (Rectangle){ screenSize.x - 17, 5, 9, 30 };
 
     // Initialize shaders values
-    fxaaUniform = GetShaderLocation(fxaa, "viewportSize");
+    fxaaUniform = GetShaderLocation(fxaa, FXAA_SCREENSIZE_UNIFORM);
 
     InitFNode();
     CheckPreviousShader();
@@ -1997,21 +1982,20 @@ int main()
         if (!settings)
         {
             UpdateInputsData();
-            
+            UpdateScroll();
+
             if (!fullVisor)
             {
-                UpdateCanvas();
-                UpdateScroll();
                 UpdateNodesEdit();
                 UpdateNodesDrag();
                 UpdateNodesLink();
                 UpdateCommentCreationEdit();
                 UpdateCommentsEdit();
                 UpdateCommentsDrag();
-                UpdateShaderData();
             }
-            else UpdateCamera(&camera3d);
         }
+
+        UpdateShaderData();
         //----------------------------------------------------------------------------------
 
         // Draw
