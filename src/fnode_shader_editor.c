@@ -279,8 +279,6 @@ void UpdateInputsData()
         
         if (!fullVisor) camera3d = (Camera){{ 0.0f, 0.0f, 4.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, 45.0f };
     }
-
-    if (fullVisor) UpdateCamera(&camera3d);
 }
 
 // Updates canvas space target and offset
@@ -1963,7 +1961,7 @@ int main()
     // Initialization
     //--------------------------------------------------------------------------------------
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
-    InitWindow(screenSize.x, screenSize.y, "fnode 1.0 - Created by Victor Fisac (www.victorfisac.com) [powered by raylib]");
+    InitWindow(screenSize.x, screenSize.y, "FNode Shader Editor [Victor Fisac - www.victorfisac.com]");
     SetTargetFPS(60);
     SetLineWidth(3);
 
@@ -1985,11 +1983,6 @@ int main()
     // Initialize shaders values
     fxaaUniform = GetShaderLocation(fxaa, "viewportSize");
 
-    // Setup orbital camera
-    SetCameraPosition(camera3d.position);
-    SetCameraTarget(camera3d.target);
-    SetCameraMode(CAMERA_FREE);
-
     InitFNode();
     CheckPreviousShader();
     //--------------------------------------------------------------------------------------
@@ -2004,15 +1997,20 @@ int main()
         if (!settings)
         {
             UpdateInputsData();
-            UpdateCanvas();
-            UpdateScroll();
-            UpdateNodesEdit();
-            UpdateNodesDrag();
-            UpdateNodesLink();
-            UpdateCommentCreationEdit();
-            UpdateCommentsEdit();
-            UpdateCommentsDrag();
-            UpdateShaderData();
+            
+            if (!fullVisor)
+            {
+                UpdateCanvas();
+                UpdateScroll();
+                UpdateNodesEdit();
+                UpdateNodesDrag();
+                UpdateNodesLink();
+                UpdateCommentCreationEdit();
+                UpdateCommentsEdit();
+                UpdateCommentsDrag();
+                UpdateShaderData();
+            }
+            else UpdateCamera(&camera3d);
         }
         //----------------------------------------------------------------------------------
 
