@@ -263,6 +263,7 @@ void DestroyNodeLine(FLine line);                                           // D
 void DestroyComment(FComment comment);                                      // Destroys a comment
 void CloseFNode();                                                          // Unitializes FNode global variables
 void TraceLogFNode(bool error, const char *text, ...);                      // Outputs a trace log message
+void SetLineWidth(float width);                                             // Sets GL state machine line width
 
 //------------------------------------------------------------------------------------
 // Math Functions 
@@ -2266,6 +2267,12 @@ void TraceLogFNode(bool error, const char *text, ...)
     fprintf(stdout, "\n");
 
     if (error) exit(1);
+}
+
+// Sets GL state machine line width
+void SetLineWidth(float width)
+{
+    glLineWidth(width);
 }
 
 // Returns length of a Vector2
