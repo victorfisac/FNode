@@ -2,6 +2,25 @@
 *
 *   FNode 1.0 - Node based shading library
 *
+*   FNode is a tool based in nodes to build GLSL shaders without any programming knowledge. You can
+*   create nodes and link themselves to operate with vectors and finally output them as the final vertex
+*   position or the final fragment color. It was developed in C programming language using OpenGL 
+*   as graphic card API and GLFW3 for windows and inputs management.
+*
+*   #define FNODE_IMPLEMENTATION
+*       Generates the implementation of the library into the included file.
+*       If not defined, the library is in header only mode and can be included in other headers 
+*       or source files without problems. But only ONE file should hold the implementation.
+*
+*   #define FNODE_STATIC (defined by default)
+*       The generated implementation will stay private inside implementation file and all 
+*       internal symbols and functions will only be visible inside that file.
+*
+*   #define FNODE_MALLOC()
+*   #define FNODE_FREE()
+*       You can define your own malloc/free implementation replacing stdlib.h malloc()/free() functions.
+*       Otherwise it will include stdlib.h and use the C standard library malloc()/free() function.
+*
 *   LICENSE: zlib/libpng
 *
 *   Copyright (c) 2016 Victor Fisac
@@ -23,41 +42,30 @@
 *
 **********************************************************************************************/
 
+#ifndef FNODE_H
+#define FNODE_H
+
+#define FNODE_STATIC
+#ifdef FNODE_STATIC
+    #define FNODEDEF static            // Functions just visible to module including this file
+#else
+    #ifdef __cplusplus
+        #define FNODEDEF extern "C"    // Functions visible from other files (no name mangling of functions in C++)
+    #else
+        #define FNODEDEF extern        // Functions visible from other files
+    #endif
+#endif
+
 //----------------------------------------------------------------------------------
 // External Includes
 //----------------------------------------------------------------------------------
 #include <raylib.h>             // Required for window management, 2D camera drawing and inputs detection
-#include <stdlib.h>             // Required for: malloc(), free(), abs(), exit(), atof()
-#include <stdio.h>              // Required for: FILE, fopen(), fprintf(), fclose(), fscanf(), stdout, vprintf(), sprintf(), fgets()
-#include <string.h>             // Required for: strcat(), strstr()
-#include <math.h>               // Required for: fabs(), sqrt(), sinf(), cosf(), cos(), sin(), tan(), pow(), floor()
-#include <stdarg.h>             // Required for: va_list, va_start(), vfprintf(), va_end()
-#include "external/glad.h"      // Required for GLAD extensions loading library, includes OpenGL headers
 
 //----------------------------------------------------------------------------------
 // Defines and Macros
 //----------------------------------------------------------------------------------
 #define     MAX_INPUTS                  4                       // Max number of inputs in every node
 #define     MAX_VALUES                  16                      // Max number of values in every output
-#define     MAX_NODES                   128                     // Max number of nodes
-#define     MAX_NODE_LENGTH             16                      // Max node output data value text length
-#define     MAX_LINES                   512                     // Max number of lines (8 lines for each node)
-#define     MAX_COMMENTS                16                      // Max number of comments
-#define     MAX_COMMENT_LENGTH          20                      // Max comment value text length
-#define     MIN_COMMENT_SIZE            75                      // Min comment width and height values
-#define     NODE_LINE_DIVISIONS         20                      // Node curved line divisions
-#define     NODE_DATA_WIDTH             30                      // Node data text width
-#define     NODE_DATA_HEIGHT            30                      // Node data text height
-#define     UI_GRID_SPACING             25                      // Interface canvas background grid divisions length
-#define     UI_GRID_COUNT               100                     // Interface canvas background grid divisions count
-#define     UI_COMMENT_WIDTH            220                     // Interface comment text box width
-#define     UI_COMMENT_HEIGHT           25                      // Interface comment text box height
-#define     UI_BUTTON_DEFAULT_COLOR     LIGHTGRAY               // Interface button background color
-#define     UI_BORDER_DEFAULT_COLOR     125                     // Interface button border color
-#define     UI_TOGGLE_TEXT_PADDING      20                      // Interface toggle text padding
-#define     UI_TOGGLE_BORDER_WIDTH      2                       // Interface toogle border width
-#define     FNODE_MALLOC(size)          malloc(size)            // Memory allocation function as define
-#define     FNODE_FREE(ptr)             free(ptr)               // Memory deallocation function as define
 
 //----------------------------------------------------------------------------------
 // Enums Definition
@@ -195,6 +203,94 @@ typedef struct FCommentData {
 } FCommentData, *FComment;
 
 //------------------------------------------------------------------------------------
+// FNode Functions Declaration
+//------------------------------------------------------------------------------------
+FNODEDEF void InitFNode();                                                           // Initializes FNode global variables
+FNODEDEF FNode CreateNodePI();                                                       // Creates a node which returns PI value
+FNODEDEF FNode CreateNodeE();                                                        // Creates a node which returns e value
+FNODEDEF FNode CreateNodeMatrix(Matrix mat);                                         // Creates a matrix 4x4 node (OpenGL style 4x4 - right handed, column major)
+FNODEDEF FNode CreateNodeValue(float value);                                         // Creates a value node (1 float)
+FNODEDEF FNode CreateNodeVector2(Vector2 vector);                                    // Creates a Vector2 node (2 float)
+FNODEDEF FNode CreateNodeVector3(Vector3 vector);                                    // Creates a Vector3 node (3 float)
+FNODEDEF FNode CreateNodeVector4(Vector4 vector);                                    // Creates a Vector4 node (4 float)
+FNODEDEF FNode CreateNodeOperator(FNodeType type, const char *name, int inputs);     // Creates an operator node with type name and inputs limit as parameters
+FNODEDEF FNode CreateNodeUniform(FNodeType type, const char *name, int dataCount);   // Creates an uniform node with type name and data count as parameters
+FNODEDEF FNode CreateNodeProperty(FNodeType type, const char *name, int dataCount, int inputs);  // Creates a property node with type name and data count as parameters
+FNODEDEF FNode CreateNodeMaterial(FNodeType type, const char *name, int dataCount);  // Creates the main node that contains final fragment color
+FNODEDEF FNode InitializeNode(bool isOperator);                                      // Initializes a new node with generic parameters
+FNODEDEF int GetNodeIndex(int id);                                                   // Returns the index of a node searching by its id
+FNODEDEF FLine CreateNodeLine();                                                     // Creates a line between two nodes
+FNODEDEF FComment CreateComment();                                                   // Creates a comment
+FNODEDEF void AlignNode(FNode node);                                                 // Aligns a node to the nearest grid intersection
+FNODEDEF void UpdateNodeShapes(FNode node);                                          // Updates a node shapes due to drag behaviour
+FNODEDEF void UpdateCommentShapes(FComment comment);                                 // Updates a comment shapes due to drag behaviour
+FNODEDEF Vector2 CameraToViewVector2(Vector2 vector, Camera2D camera);               // Converts Vector2 coordinates from world space to Camera2D space based on its offset
+FNODEDEF Rectangle CameraToViewRec(Rectangle rec, Camera2D camera);                  // Converts rectangle coordinates from world space to Camera2D space based on its offset
+FNODEDEF void CalculateValues();                                                     // Calculates nodes output values based on current inputs
+FNODEDEF void DrawNode(FNode node);                                                  // Draws a previously created node
+FNODEDEF void DrawNodeLine(FLine line);                                              // Draws a previously created node line
+FNODEDEF void DrawComment(FComment comment);                                         // Draws a previously created comment
+FNODEDEF bool FButton(Rectangle bounds, const char *text);                           // Button element, returns true when pressed
+FNODEDEF bool FToggle(Rectangle bounds, bool toggle);                                // Toggle Button element, returns true when active
+FNODEDEF void DestroyNode(FNode node);                                               // Destroys a node and its linked lines
+FNODEDEF void DestroyNodeLine(FLine line);                                           // Destroys a node line
+FNODEDEF void DestroyComment(FComment comment);                                      // Destroys a comment
+FNODEDEF void CloseFNode();                                                          // Unitializes FNode global variables
+FNODEDEF void TraceLogFNode(bool error, const char *text, ...);                      // Outputs a trace log message
+FNODEDEF void SetLineWidth(float width);                                             // Sets GL state machine line width
+FNODEDEF int FSearch(char *filename, char *string);                                  // Returns 1 if a specific string is found in a text file
+
+#endif // FNODE_H
+
+/***********************************************************************************
+*
+*   FNODE IMPLEMENTATION
+*
+************************************************************************************/
+
+#if defined(FNODE_IMPLEMENTATION)
+
+// Check if custom malloc/free functions defined, if not, using standard ones
+#if !defined(FNODE_MALLOC)
+    #include <stdlib.h>     // Required for: malloc(), free()
+    
+    #define     FNODE_MALLOC(size)      malloc(size)            // Memory allocation function as define
+    #define     FNODE_FREE(ptr)         free(ptr)               // Memory deallocation function as define
+#endif
+
+#include <stdio.h>              // Required for: FILE, fopen(), fprintf(), fclose(), fscanf(), stdout, vprintf(), sprintf(), fgets()
+#include <string.h>             // Required for: strcat(), strstr()
+#include <math.h>               // Required for: fabs(), sqrt(), sinf(), cosf(), cos(), sin(), tan(), pow(), floor()
+#include <stdarg.h>             // Required for: va_list, va_start(), vfprintf(), va_end()
+#include "external/glad.h"      // Required for GLAD extensions loading library, includes OpenGL headers
+
+//----------------------------------------------------------------------------------
+// Defines and Macros
+//----------------------------------------------------------------------------------
+#define     MAX_NODES                   128                     // Max number of nodes
+#define     MAX_NODE_LENGTH             16                      // Max node output data value text length
+#define     MAX_LINES                   512                     // Max number of lines (8 lines for each node)
+#define     MAX_COMMENTS                16                      // Max number of comments
+#define     MAX_COMMENT_LENGTH          20                      // Max comment value text length
+#define     MIN_COMMENT_SIZE            75                      // Min comment width and height values
+#define     NODE_LINE_DIVISIONS         20                      // Node curved line divisions
+#define     NODE_DATA_WIDTH             30                      // Node data text width
+#define     NODE_DATA_HEIGHT            30                      // Node data text height
+#define     UI_GRID_SPACING             25                      // Interface canvas background grid divisions length
+#define     UI_GRID_COUNT               100                     // Interface canvas background grid divisions count
+#define     UI_COMMENT_WIDTH            220                     // Interface comment text box width
+#define     UI_COMMENT_HEIGHT           25                      // Interface comment text box height
+#define     UI_BUTTON_DEFAULT_COLOR     LIGHTGRAY               // Interface button background color
+#define     UI_BORDER_DEFAULT_COLOR     125                     // Interface button border color
+#define     UI_TOGGLE_TEXT_PADDING      20                      // Interface toggle text padding
+#define     UI_TOGGLE_BORDER_WIDTH      2                       // Interface toogle border width
+
+//----------------------------------------------------------------------------------
+// Types and Structures Definition
+//----------------------------------------------------------------------------------
+// ...
+
+//------------------------------------------------------------------------------------
 // Global Variables Definition
 //------------------------------------------------------------------------------------
 int usedMemory = 0;                         // Total used RAM from memory allocation
@@ -228,99 +324,59 @@ Camera camera3d;                            // Visor camera 3d for model and sha
 bool debugMode = false;                     // Drawing debug information state
 int menuOffset = 0;                         // Interface elements position current offset
 bool interact = true;                       // Buttons and text can interact state
-//------------------------------------------------------------------------------------
-// FNode Functions 
-//------------------------------------------------------------------------------------
-void InitFNode();                                                           // Initializes FNode global variables
-FNode CreateNodePI();                                                       // Creates a node which returns PI value
-FNode CreateNodeE();                                                        // Creates a node which returns e value
-FNode CreateNodeMatrix(Matrix mat);                                         // Creates a matrix 4x4 node (OpenGL style 4x4 - right handed, column major)
-FNode CreateNodeValue(float value);                                         // Creates a value node (1 float)
-FNode CreateNodeVector2(Vector2 vector);                                    // Creates a Vector2 node (2 float)
-FNode CreateNodeVector3(Vector3 vector);                                    // Creates a Vector3 node (3 float)
-FNode CreateNodeVector4(Vector4 vector);                                    // Creates a Vector4 node (4 float)
-FNode CreateNodeOperator(FNodeType type, const char *name, int inputs);     // Creates an operator node with type name and inputs limit as parameters
-FNode CreateNodeUniform(FNodeType type, const char *name, int dataCount);   // Creates an uniform node with type name and data count as parameters
-FNode CreateNodeProperty(FNodeType type, const char *name, int dataCount, int inputs);  // Creates a property node with type name and data count as parameters
-FNode CreateNodeMaterial(FNodeType type, const char *name, int dataCount);  // Creates the main node that contains final fragment color
-FNode InitializeNode(bool isOperator);                                      // Initializes a new node with generic parameters
-int GetNodeIndex(int id);                                                   // Returns the index of a node searching by its id
-FLine CreateNodeLine();                                                     // Creates a line between two nodes
-FComment CreateComment();                                                   // Creates a comment
-void AlignNode(FNode node);                                                 // Aligns a node to the nearest grid intersection
-void UpdateNodeShapes(FNode node);                                          // Updates a node shapes due to drag behaviour
-void UpdateCommentShapes(FComment comment);                                 // Updates a comment shapes due to drag behaviour
-Vector2 CameraToViewVector2(Vector2 vector, Camera2D camera);               // Converts Vector2 coordinates from world space to Camera2D space based on its offset
-Rectangle CameraToViewRec(Rectangle rec, Camera2D camera);                  // Converts rectangle coordinates from world space to Camera2D space based on its offset
-void CalculateValues();                                                     // Calculates nodes output values based on current inputs
-void DrawNode(FNode node);                                                  // Draws a previously created node
-void DrawNodeLine(FLine line);                                              // Draws a previously created node line
-void DrawComment(FComment comment);                                         // Draws a previously created comment
-bool FButton(Rectangle bounds, const char *text);                           // Button element, returns true when pressed
-bool FToggle(Rectangle bounds, bool toggle);                                // Toggle Button element, returns true when active
-void DestroyNode(FNode node);                                               // Destroys a node and its linked lines
-void DestroyNodeLine(FLine line);                                           // Destroys a node line
-void DestroyComment(FComment comment);                                      // Destroys a comment
-void CloseFNode();                                                          // Unitializes FNode global variables
-void TraceLogFNode(bool error, const char *text, ...);                      // Outputs a trace log message
-void SetLineWidth(float width);                                             // Sets GL state machine line width
 
 //------------------------------------------------------------------------------------
-// Math Functions 
+// Module specific Functions Declaration
 //------------------------------------------------------------------------------------
-float FVector2Length(Vector2 v);                                    // Returns length of a Vector2
-float FVector3Length(Vector3 v);                                    // Returns length of a Vector3
-float FVector4Length(Vector4 v);                                    // Returns length of a Vector4
-Vector2 FVector2Normalize(Vector2 v);                               // Returns a normalized Vector2
-Vector3 FVector3Normalize(Vector3 v);                               // Returns a normalized Vector3
-Vector4 FVector4Normalize(Vector4 v);                               // Returns a normalized Vector4
-float FVector2Dot(Vector2 a, Vector2 b);                            // Returns the dot product of two Vector2
-float FVector3Dot(Vector3 a, Vector3 b);                            // Returns the dot product of two Vector3
-float FVector4Dot(Vector4 a, Vector4 b);                            // Returns the dot product of two Vector4
-Vector2 FVector2Projection(Vector2 a, Vector2 b);                   // Returns the projection vector of two Vector2
-Vector3 FVector3Projection(Vector3 a, Vector3 b);                   // Returns the projection vector of two Vector3
-Vector4 FVector4Projection(Vector4 a, Vector4 b);                   // Returns the projection vector of two Vector4
-Vector2 FVector2Rejection(Vector2 a, Vector2 b);                    // Returns the rejection vector of two Vector2
-Vector3 FVector3Rejection(Vector3 a, Vector3 b);                    // Returns the rejection vector of two Vector3
-Vector4 FVector4Rejection(Vector4 a, Vector4 b);                    // Returns the rejection vector of two Vector4
-Vector3 FCrossProduct(Vector3 a, Vector3 b);                        // Returns the cross product of two vectors
-Matrix FMatrixIdentity();                                           // Returns identity matrix
-Matrix FMatrixMultiply(Matrix left, Matrix right);                  // Returns the result of multiply two matrices
-Matrix FMatrixTranslate(float x, float y, float z);                 // Returns translation matrix
-Matrix FMatrixRotate(Vector3 axis, float angle);                    // Create rotation matrix from axis and angle provided in radians
-Matrix FMatrixScale(float x, float y, float z);                     // Returns scaling matrix
-void FMatrixTranspose(Matrix *mat);                                 // Transposes provided matrix
-void FMultiplyMatrixVector(Vector4 *v, Matrix mat);                 // Transform a quaternion given a transformation matrix
-float FCos(float value);                                            // Returns the cosine value of a radian angle
-float FSin(float value);                                            // Returns the sine value of a radian angle
-float FTan(float value);                                            // Returns the tangent value of a radian angle
-float FPower(float value, float exp);                               // Returns a value to the power of an exponent
-float FSquareRoot(float value);                                     // Returns the square root of the input value
-float FPosterize(float value, float samples);                       // Returns a value rounded based on the samples
-float FClamp(float value, float min, float max);                    // Returns a value clamped by a min and max values
-float FTrunc(float value);                                          // Returns a truncated value of a value
-float FRound(float value);                                          // Returns a rounded value of a value
-float FCeil(float value);                                           // Returns a rounded up to the nearest integer of a value
-float FLerp(float valueA, float valueB, float time);                // Returns the interpolation between two values
-Vector2 FVector2Lerp(Vector2 valueA, Vector2 valueB, float time);   // Returns the interpolation between two Vector2 values
-Vector3 FVector3Lerp(Vector3 valueA, Vector3 valueB, float time);   // Returns the interpolation between two Vector3 values
-Vector4 FVector4Lerp(Vector4 valueA, Vector4 valueB, float time);   // Returns the interpolation between two Vector4 values
-float FSmoothStep(float min, float max, float value);               // Returns the interpolate of a value in a range
-float FEaseLinear(float t, float b, float c, float d);              // Returns an ease linear value between two parameters 
-float FEaseInOutQuad(float t, float b, float c, float d);           // Returns an ease quadratic in-out value between two parameters
+static float FVector2Length(Vector2 v);                                    // Returns length of a Vector2
+static float FVector3Length(Vector3 v);                                    // Returns length of a Vector3
+static float FVector4Length(Vector4 v);                                    // Returns length of a Vector4
+static Vector2 FVector2Normalize(Vector2 v);                               // Returns a normalized Vector2
+static Vector3 FVector3Normalize(Vector3 v);                               // Returns a normalized Vector3
+static Vector4 FVector4Normalize(Vector4 v);                               // Returns a normalized Vector4
+static float FVector2Dot(Vector2 a, Vector2 b);                            // Returns the dot product of two Vector2
+static float FVector3Dot(Vector3 a, Vector3 b);                            // Returns the dot product of two Vector3
+static float FVector4Dot(Vector4 a, Vector4 b);                            // Returns the dot product of two Vector4
+static Vector2 FVector2Projection(Vector2 a, Vector2 b);                   // Returns the projection vector of two Vector2
+static Vector3 FVector3Projection(Vector3 a, Vector3 b);                   // Returns the projection vector of two Vector3
+static Vector4 FVector4Projection(Vector4 a, Vector4 b);                   // Returns the projection vector of two Vector4
+static Vector2 FVector2Rejection(Vector2 a, Vector2 b);                    // Returns the rejection vector of two Vector2
+static Vector3 FVector3Rejection(Vector3 a, Vector3 b);                    // Returns the rejection vector of two Vector3
+static Vector4 FVector4Rejection(Vector4 a, Vector4 b);                    // Returns the rejection vector of two Vector4
+static Vector3 FCrossProduct(Vector3 a, Vector3 b);                        // Returns the cross product of two vectors
+static Matrix FMatrixIdentity();                                           // Returns identity matrix
+static Matrix FMatrixMultiply(Matrix left, Matrix right);                  // Returns the result of multiply two matrices
+static Matrix FMatrixTranslate(float x, float y, float z);                 // Returns translation matrix
+static Matrix FMatrixRotate(Vector3 axis, float angle);                    // Create rotation matrix from axis and angle provided in radians
+static Matrix FMatrixScale(float x, float y, float z);                     // Returns scaling matrix
+static void FMatrixTranspose(Matrix *mat);                                 // Transposes provided matrix
+static void FMultiplyMatrixVector(Vector4 *v, Matrix mat);                 // Transform a quaternion given a transformation matrix
+static float FCos(float value);                                            // Returns the cosine value of a radian angle
+static float FSin(float value);                                            // Returns the sine value of a radian angle
+static float FTan(float value);                                            // Returns the tangent value of a radian angle
+static float FPower(float value, float exp);                               // Returns a value to the power of an exponent
+static float FSquareRoot(float value);                                     // Returns the square root of the input value
+static float FPosterize(float value, float samples);                       // Returns a value rounded based on the samples
+static float FClamp(float value, float min, float max);                    // Returns a value clamped by a min and max values
+static float FTrunc(float value);                                          // Returns a truncated value of a value
+static float FRound(float value);                                          // Returns a rounded value of a value
+static float FCeil(float value);                                           // Returns a rounded up to the nearest integer of a value
+static float FLerp(float valueA, float valueB, float time);                // Returns the interpolation between two values
+static Vector2 FVector2Lerp(Vector2 valueA, Vector2 valueB, float time);   // Returns the interpolation between two Vector2 values
+static Vector3 FVector3Lerp(Vector3 valueA, Vector3 valueB, float time);   // Returns the interpolation between two Vector3 values
+static Vector4 FVector4Lerp(Vector4 valueA, Vector4 valueB, float time);   // Returns the interpolation between two Vector4 values
+static float FSmoothStep(float min, float max, float value);               // Returns the interpolate of a value in a range
+static float FEaseLinear(float t, float b, float c, float d);              // Returns an ease linear value between two parameters 
+static float FEaseInOutQuad(float t, float b, float c, float d);           // Returns an ease quadratic in-out value between two parameters
+
+static void FStringToFloat(float *pointer, const char *string);            // Sends a float conversion value of a string to an initialized float pointer
+static void FFloatToString(char *buffer, float value);                     // Sends formatted output to an initialized string pointer
 
 //------------------------------------------------------------------------------------
-// String Functions
-//------------------------------------------------------------------------------------
-void FStringToFloat(float *pointer, const char *string);        // Sends a float conversion value of a string to an initialized float pointer
-void FFloatToString(char *buffer, float value);                 // Sends formatted output to an initialized string pointer
-int FSearch(char *filename, char *string);                      // Returns 1 if a specific string is found in a text file
-
-//------------------------------------------------------------------------------------
-// Functions Declarations
+// Functions Definition
 //------------------------------------------------------------------------------------
 // Initializes FNode global variables
-void InitFNode()
+FNODEDEF void InitFNode()
 {
     nodesCount = 0;
     linesCount = 0;
@@ -335,7 +391,7 @@ void InitFNode()
 }
 
 // Creates a node which returns PI value
-FNode CreateNodePI()
+FNODEDEF FNode CreateNodePI()
 {
     FNode newNode = InitializeNode(false);
 
@@ -352,7 +408,7 @@ FNode CreateNodePI()
 }
 
 // Creates a node which returns e value
-FNode CreateNodeE()
+FNODEDEF FNode CreateNodeE()
 {
     FNode newNode = InitializeNode(false);
 
@@ -369,7 +425,7 @@ FNode CreateNodeE()
 }
 
 // Creates a matrix 4x4 node (OpenGL style 4x4 - right handed, column major)
-FNode CreateNodeMatrix(Matrix mat)
+FNODEDEF FNode CreateNodeMatrix(Matrix mat)
 {
     FNode newNode = InitializeNode(false);
 
@@ -402,7 +458,7 @@ FNode CreateNodeMatrix(Matrix mat)
 }
 
 // Creates a value node (1 float)
-FNode CreateNodeValue(float value)
+FNODEDEF FNode CreateNodeValue(float value)
 {
     FNode newNode = InitializeNode(false);
 
@@ -419,7 +475,7 @@ FNode CreateNodeValue(float value)
 }
 
 // Creates a Vector2 node (2 float)
-FNode CreateNodeVector2(Vector2 vector)
+FNODEDEF FNode CreateNodeVector2(Vector2 vector)
 {
     FNode newNode = InitializeNode(false);
 
@@ -438,7 +494,7 @@ FNode CreateNodeVector2(Vector2 vector)
 }
 
 // Creates a Vector3 node (3 float)
-FNode CreateNodeVector3(Vector3 vector)
+FNODEDEF FNode CreateNodeVector3(Vector3 vector)
 {
     FNode newNode = InitializeNode(false);
 
@@ -458,7 +514,7 @@ FNode CreateNodeVector3(Vector3 vector)
 }
 
 // Creates a Vector4 node (4 float)
-FNode CreateNodeVector4(Vector4 vector)
+FNODEDEF FNode CreateNodeVector4(Vector4 vector)
 {
     FNode newNode = InitializeNode(false);
 
@@ -479,7 +535,7 @@ FNode CreateNodeVector4(Vector4 vector)
 }
 
 // Creates an operator node with type name and inputs limit as parameters
-FNode CreateNodeOperator(FNodeType type, const char *name, int inputs)
+FNODEDEF FNode CreateNodeOperator(FNodeType type, const char *name, int inputs)
 {
     FNode newNode = InitializeNode(true);
 
@@ -493,7 +549,7 @@ FNode CreateNodeOperator(FNodeType type, const char *name, int inputs)
 }
 
 // Creates an uniform node with type name and data count as parameters
-FNode CreateNodeUniform(FNodeType type, const char *name, int dataCount)
+FNODEDEF FNode CreateNodeUniform(FNodeType type, const char *name, int dataCount)
 {
     FNode newNode = InitializeNode(false);
 
@@ -507,7 +563,7 @@ FNode CreateNodeUniform(FNodeType type, const char *name, int dataCount)
 }
 
 // Creates a property node with type name and data count as parameters
-FNode CreateNodeProperty(FNodeType type, const char *name, int dataCount, int inputs)
+FNODEDEF FNode CreateNodeProperty(FNodeType type, const char *name, int dataCount, int inputs)
 {
     FNode newNode = InitializeNode((inputs > 0));
 
@@ -523,7 +579,7 @@ FNode CreateNodeProperty(FNodeType type, const char *name, int dataCount, int in
 }
 
 // Creates the main node that contains final material attributes
-FNode CreateNodeMaterial(FNodeType type, const char *name, int dataCount)
+FNODEDEF FNode CreateNodeMaterial(FNodeType type, const char *name, int dataCount)
 {
     FNode newNode = InitializeNode(true);
 
@@ -539,7 +595,7 @@ FNode CreateNodeMaterial(FNodeType type, const char *name, int dataCount)
 }
 
 // Initializes a new node with generic parameters
-FNode InitializeNode(bool isOperator)
+FNODEDEF FNode InitializeNode(bool isOperator)
 {
     FNode newNode = (FNode)FNODE_MALLOC(sizeof(FNodeData));
     usedMemory += sizeof(FNodeData);
@@ -604,7 +660,7 @@ FNode InitializeNode(bool isOperator)
 }
 
 // Returns the index of a node searching by its id
-int GetNodeIndex(int id)
+FNODEDEF int GetNodeIndex(int id)
 {
     int output = -1;
 
@@ -623,7 +679,7 @@ int GetNodeIndex(int id)
 }
 
 // Creates a line between two nodes
-FLine CreateNodeLine(int from)
+FNODEDEF FLine CreateNodeLine(int from)
 {
     FLine newLine = (FLine)FNODE_MALLOC(sizeof(FLineData));
     usedMemory += sizeof(FLineData);
@@ -668,7 +724,7 @@ FLine CreateNodeLine(int from)
 }
 
 // Creates a comment
-FComment CreateComment()
+FNODEDEF FComment CreateComment()
 {
     FComment newComment = (FComment)FNODE_MALLOC(sizeof(FCommentData));
     usedMemory += sizeof(FCommentData);
@@ -737,7 +793,7 @@ FComment CreateComment()
 }
 
 // Aligns a node to the nearest grid intersection
-void AlignNode(FNode node)
+FNODEDEF void AlignNode(FNode node)
 {
     int spacing = 0;
     float currentDistance = 999999;
@@ -780,7 +836,7 @@ void AlignNode(FNode node)
 }
 
 // Updates a node shapes due to drag behaviour
-void UpdateNodeShapes(FNode node)
+FNODEDEF void UpdateNodeShapes(FNode node)
 {
     if (node != NULL)
     {
@@ -833,7 +889,7 @@ void UpdateNodeShapes(FNode node)
 }
 
 // Updates a comment shapes due to drag behaviour
-void UpdateCommentShapes(FComment comment)
+FNODEDEF void UpdateCommentShapes(FComment comment)
 {
     if (comment != NULL)
     {
@@ -866,19 +922,19 @@ void UpdateCommentShapes(FComment comment)
 }
 
 // Converts Vector2 coordinates from world space to Camera2D space based on its offset
-Vector2 CameraToViewVector2(Vector2 vector, Camera2D camera)
+FNODEDEF Vector2 CameraToViewVector2(Vector2 vector, Camera2D camera)
 {
     return (Vector2){ vector.x - camera.offset.x, vector.y - camera.offset.y };
 }
 
 // Converts rectangle coordinates from world space to Camera2D space based on its offset
-Rectangle CameraToViewRec(Rectangle rec, Camera2D camera)
+FNODEDEF Rectangle CameraToViewRec(Rectangle rec, Camera2D camera)
 {
     return (Rectangle){ rec.x + camera.offset.x, rec.y + camera.offset.y, rec.width, rec.height };
 }
 
 // Calculates nodes output values based on current inputs
-void CalculateValues()
+FNODEDEF void CalculateValues()
 {
     for (int i = 0; i < nodesCount; i++)
     {
@@ -1656,7 +1712,7 @@ void CalculateValues()
 }
 
 // Draws a previously created node
-void DrawNode(FNode node)
+FNODEDEF void DrawNode(FNode node)
 {
     if (node != NULL)
     {
@@ -1773,7 +1829,7 @@ void DrawNode(FNode node)
 }
 
 // Draws a previously created node line
-void DrawNodeLine(FLine line)
+FNODEDEF void DrawNodeLine(FLine line)
 {
     if (line != NULL)
     {
@@ -1897,7 +1953,7 @@ void DrawNodeLine(FLine line)
 }
 
 // Draws a previously created comment
-void DrawComment(FComment comment)
+FNODEDEF void DrawComment(FComment comment)
 {
     if (comment != NULL)
     {
@@ -1977,7 +2033,7 @@ void DrawComment(FComment comment)
 }
 
 // Button element, returns true when pressed
-bool FButton(Rectangle bounds, const char *text)
+FNODEDEF bool FButton(Rectangle bounds, const char *text)
 {
     ButtonState buttonState = BUTTON_DEFAULT;
 
@@ -2024,7 +2080,7 @@ bool FButton(Rectangle bounds, const char *text)
 }
 
 // Toggle Button element, returns true when active
-bool FToggle(Rectangle bounds, bool toggle)
+FNODEDEF bool FToggle(Rectangle bounds, bool toggle)
 {
     ToggleState toggleState = TOGGLE_UNACTIVE;
     Rectangle toggleButton = bounds;
@@ -2078,7 +2134,7 @@ bool FToggle(Rectangle bounds, bool toggle)
 }
 
 // Destroys a node and its linked lines
-void DestroyNode(FNode node)
+FNODEDEF void DestroyNode(FNode node)
 {
     if (node != NULL)
     {
@@ -2114,7 +2170,7 @@ void DestroyNode(FNode node)
 }
 
 // Destroys a node line
-void DestroyNodeLine(FLine line)
+FNODEDEF void DestroyNodeLine(FLine line)
 {
     if (line != NULL)
     {
@@ -2151,7 +2207,7 @@ void DestroyNodeLine(FLine line)
 }
 
 // Destroys a comment
-void DestroyComment(FComment comment)
+FNODEDEF void DestroyComment(FComment comment)
 {
     if (comment != NULL)
     {
@@ -2192,7 +2248,7 @@ void DestroyComment(FComment comment)
 }
 
 // Unitializes FNode global variables
-void CloseFNode()
+FNODEDEF void CloseFNode()
 {
     for (int i = 0; i < nodesCount; i++)
     {
@@ -2255,7 +2311,7 @@ void CloseFNode()
 }
 
 // Outputs a trace log message
-void TraceLogFNode(bool error, const char *text, ...)
+FNODEDEF void TraceLogFNode(bool error, const char *text, ...)
 {
     va_list args;
 
@@ -2270,52 +2326,81 @@ void TraceLogFNode(bool error, const char *text, ...)
 }
 
 // Sets GL state machine line width
-void SetLineWidth(float width)
+FNODEDEF void SetLineWidth(float width)
 {
     glLineWidth(width);
 }
 
+// Returns 1 if a specific string is found in a text file
+FNODEDEF int FSearch(char *filename, char *string)
+{
+	FILE *file;
+	int found = 0;
+	char temp[512];
+
+	file = fopen(filename, "r");
+
+    if (file != NULL)
+    {
+        while (fgets(temp, 512, file) != NULL) 
+        {
+            if ((strstr(temp, string)) != NULL)
+            {
+                found = 1;
+                break;
+            }
+        }
+
+        fclose(file);
+    }
+
+   	return found;
+}
+
+//----------------------------------------------------------------------------------
+// Module specific Functions Definition
+//----------------------------------------------------------------------------------
 // Returns length of a Vector2
-float FVector2Length(Vector2 v)
+static float FVector2Length(Vector2 v)
 {
     return (float)sqrt(v.x*v.x + v.y*v.y);
 }
 
 // Returns length of a Vector3
-float FVector3Length(Vector3 v)
+static float FVector3Length(Vector3 v)
 {
     return (float)sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
 }
 
 // Returns length of a Vector4
-float FVector4Length(Vector4 v)
+static float FVector4Length(Vector4 v)
 {
     return (float)sqrt(v.x*v.x + v.y*v.y + v.z*v.z + v.w*v.w);
 }
 
 // Returns a normalized Vector2
-Vector2 FVector2Normalize(Vector2 v)
+static Vector2 FVector2Normalize(Vector2 v)
 {
     float length = FVector2Length(v);
     return (Vector2){ v.x/length, v.y/length };
 }
 
 // Returns a normalized Vector3
-Vector3 FVector3Normalize(Vector3 v)
+static Vector3 FVector3Normalize(Vector3 v)
 {
     float length = FVector3Length(v);
     return (Vector3){ v.x/length, v.y/length, v.z/length };
 }
 
 // Returns a normalized Vector4
-Vector4 FVector4Normalize(Vector4 v)
+static Vector4 FVector4Normalize(Vector4 v)
 {
     float length = FVector4Length(v);
     return (Vector4){ v.x/length, v.y/length, v.z/length, v.w/length };
 }
 
 // Returns the projection vector of two Vector2
-Vector2 FVector2Projection(Vector2 a, Vector2 b)
+static Vector2 FVector2Projection(Vector2 a, Vector2 b)
 {
     Vector2 output = { 0, 0 };
 
@@ -2328,7 +2413,7 @@ Vector2 FVector2Projection(Vector2 a, Vector2 b)
 }
 
 // Returns the projection vector of two Vector3
-Vector3 FVector3Projection(Vector3 a, Vector3 b)
+static Vector3 FVector3Projection(Vector3 a, Vector3 b)
 {
     Vector3 output = { 0, 0, 0 };
 
@@ -2342,7 +2427,7 @@ Vector3 FVector3Projection(Vector3 a, Vector3 b)
 }
 
 // Returns the projection vector of two Vector4
-Vector4 FVector4Projection(Vector4 a, Vector4 b)
+static Vector4 FVector4Projection(Vector4 a, Vector4 b)
 {
     Vector4 output = { 0, 0, 0, 0 };
 
@@ -2357,7 +2442,7 @@ Vector4 FVector4Projection(Vector4 a, Vector4 b)
 }
 
 // Returns the rejection vector of two Vector2
-Vector2 FVector2Rejection(Vector2 a, Vector2 b)
+static Vector2 FVector2Rejection(Vector2 a, Vector2 b)
 {
     Vector2 output = { 0, 0 };
 
@@ -2369,7 +2454,7 @@ Vector2 FVector2Rejection(Vector2 a, Vector2 b)
 }
 
 // Returns the rejection vector of two Vector3
-Vector3 FVector3Rejection(Vector3 a, Vector3 b)
+static Vector3 FVector3Rejection(Vector3 a, Vector3 b)
 {
     Vector3 output = { 0, 0, 0 };
 
@@ -2382,7 +2467,7 @@ Vector3 FVector3Rejection(Vector3 a, Vector3 b)
 }
 
 // Returns the rejection vector of two Vector4
-Vector4 FVector4Rejection(Vector4 a, Vector4 b)
+static Vector4 FVector4Rejection(Vector4 a, Vector4 b)
 {
     Vector4 output = { 0, 0, 0, 0 };
 
@@ -2396,31 +2481,31 @@ Vector4 FVector4Rejection(Vector4 a, Vector4 b)
 }
 
 // Returns the dot product of two Vector2
-float FVector2Dot(Vector2 a, Vector2 b)
+static float FVector2Dot(Vector2 a, Vector2 b)
 {
     return (float)((a.x*b.x) + (a.y*b.y));
 }
 
 // Returns the dot product of two Vector3
-float FVector3Dot(Vector3 a, Vector3 b)
+static float FVector3Dot(Vector3 a, Vector3 b)
 {
     return (float)((a.x*b.x) + (a.y*b.y) + (a.z*b.z));
 }
 
 // Returns the dot product of two Vector4
-float FVector4Dot(Vector4 a, Vector4 b)
+static float FVector4Dot(Vector4 a, Vector4 b)
 {
     return (float)((a.x*b.x) + (a.y*b.y) + (a.z*b.z) + (a.w*b.w));
 }
 
 // Returns the cross product of two vectors
-Vector3 FCrossProduct(Vector3 a, Vector3 b)
+static Vector3 FCrossProduct(Vector3 a, Vector3 b)
 {  
     return (Vector3){ a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x };
 }
 
 // Returns identity matrix
-Matrix FMatrixIdentity()
+static Matrix FMatrixIdentity()
 {
     Matrix result = { 1.0f, 0.0f, 0.0f, 0.0f, 
                       0.0f, 1.0f, 0.0f, 0.0f, 
@@ -2431,7 +2516,7 @@ Matrix FMatrixIdentity()
 }
 
 // Returns the result of multiply two matrices
-Matrix FMatrixMultiply(Matrix left, Matrix right)
+static Matrix FMatrixMultiply(Matrix left, Matrix right)
 {
     Matrix result;
 
@@ -2456,7 +2541,7 @@ Matrix FMatrixMultiply(Matrix left, Matrix right)
 }
 
 // Returns translation matrix
-Matrix FMatrixTranslate(float x, float y, float z)
+static Matrix FMatrixTranslate(float x, float y, float z)
 {
     Matrix result = { 1.0f, 0.0f, 0.0f, 0.0f, 
                       0.0f, 1.0f, 0.0f, 0.0f, 
@@ -2467,7 +2552,7 @@ Matrix FMatrixTranslate(float x, float y, float z)
 }
 
 // Create rotation matrix from axis and angle provided in radians
-Matrix FMatrixRotate(Vector3 axis, float angle)
+static Matrix FMatrixRotate(Vector3 axis, float angle)
 {
     Matrix result;
 
@@ -2519,7 +2604,7 @@ Matrix FMatrixRotate(Vector3 axis, float angle)
 }
 
 // Returns scaling matrix
-Matrix FMatrixScale(float x, float y, float z)
+static Matrix FMatrixScale(float x, float y, float z)
 {
     Matrix result = { x, 0.0f, 0.0f, 0.0f, 
                       0.0f, y, 0.0f, 0.0f, 
@@ -2530,7 +2615,7 @@ Matrix FMatrixScale(float x, float y, float z)
 }
 
 // Transposes provided matrix
-void FMatrixTranspose(Matrix *mat)
+static void FMatrixTranspose(Matrix *mat)
 {
     Matrix temp;
 
@@ -2555,7 +2640,7 @@ void FMatrixTranspose(Matrix *mat)
 }
 
 // Transform a quaternion given a transformation matrix
-void FMultiplyMatrixVector(Vector4 *v, Matrix mat)
+static void FMultiplyMatrixVector(Vector4 *v, Matrix mat)
 {
     float x = v->x;
     float y = v->y;
@@ -2569,37 +2654,37 @@ void FMultiplyMatrixVector(Vector4 *v, Matrix mat)
 }
 
 // Returns the cosine value of a radian angle
-float FCos(float value)
+static float FCos(float value)
 {    
     return (float)cos(value);
 }
 
 // Returns the sine value of a radian angle
-float FSin(float value)
+static float FSin(float value)
 {    
     return (float)sin(value);
 }
 
 // Returns the tangent value of a radian angle
-float FTan(float value)
+static float FTan(float value)
 {    
     return (float)tan(value);
 }
 
 // Returns a value to the power of an exponent
-float FPower(float value, float exp)
+static float FPower(float value, float exp)
 {    
     return (float)pow(value, exp);
 }
 
 // Returns the square root of the input value
-float FSquareRoot(float value)
+static float FSquareRoot(float value)
 {    
     return (float)sqrt(value);
 }
 
 // Returns a value rounded based on the samples
-float FPosterize(float value, float samples)
+static float FPosterize(float value, float samples)
 {
     float output = value*samples;
 
@@ -2610,7 +2695,7 @@ float FPosterize(float value, float samples)
 }
 
 // Returns a value clamped by a min and max values
-float FClamp(float value, float min, float max)
+static float FClamp(float value, float min, float max)
 {
     float output = value;
 
@@ -2621,7 +2706,7 @@ float FClamp(float value, float min, float max)
 }
 
 // Returns a truncated value of a value
-float FTrunc(float value)
+static float FTrunc(float value)
 {
     float output = value;
 
@@ -2632,7 +2717,7 @@ float FTrunc(float value)
 }
 
 // Returns a rounded value of a value
-float FRound(float value)
+static float FRound(float value)
 {
     float output = fabs(value);
 
@@ -2646,7 +2731,7 @@ float FRound(float value)
 }
 
 // Returns a rounded up to the nearest integer of a value
-float FCeil(float value)
+static float FCeil(float value)
 {
     float output = value;
 
@@ -2657,31 +2742,31 @@ float FCeil(float value)
 }
 
 // Returns the interpolation between two values
-float FLerp(float valueA, float valueB, float time)
+static float FLerp(float valueA, float valueB, float time)
 {
     return (float)(valueA + (valueB - valueA)*time);
 }
 
 // Returns the interpolation between two Vector2 values
-Vector2 FVector2Lerp(Vector2 valueA, Vector2 valueB, float time)
+static Vector2 FVector2Lerp(Vector2 valueA, Vector2 valueB, float time)
 {
     return (Vector2){ (float)(valueA.x + (valueB.x - valueA.x)*time), (float)(valueA.y + (valueB.y - valueA.y)*time) };
 }
 
 // Returns the interpolation between two Vector3 values
-Vector3 FVector3Lerp(Vector3 valueA, Vector3 valueB, float time)
+static Vector3 FVector3Lerp(Vector3 valueA, Vector3 valueB, float time)
 {
     return (Vector3){ (float)(valueA.x + (valueB.x - valueA.x)*time), (float)(valueA.y + (valueB.y - valueA.y)*time), (float)(valueA.z + (valueB.z - valueA.z)*time) };
 }
 
 // Returns the interpolation between two Vector4 values
-Vector4 FVector4Lerp(Vector4 valueA, Vector4 valueB, float time)
+static Vector4 FVector4Lerp(Vector4 valueA, Vector4 valueB, float time)
 {
     return (Vector4){ (float)(valueA.x + (valueB.x - valueA.x)*time), (float)(valueA.y + (valueB.y - valueA.y)*time), (float)(valueA.z + (valueB.z - valueA.z)*time), (float)(valueA.w + (valueB.w - valueA.w)*time) };
 }
 
 // Returns the interpolate of a value in a range
-float FSmoothStep(float min, float max, float value)
+static float FSmoothStep(float min, float max, float value)
 {
     float output = 0.0f;
 
@@ -2692,13 +2777,13 @@ float FSmoothStep(float min, float max, float value)
 }
 
 // Returns an ease linear value between two parameters
-float FEaseLinear(float t, float b, float c, float d)
+static float FEaseLinear(float t, float b, float c, float d)
 { 
     return (float)(c*t/d + b); 
 }
 
 // Returns an ease quadratic in-out value between two parameters
-float FEaseInOutQuad(float t, float b, float c, float d)
+static float FEaseInOutQuad(float t, float b, float c, float d)
 {
     float output = 0.0f;
 
@@ -2714,39 +2799,15 @@ float FEaseInOutQuad(float t, float b, float c, float d)
 }
 
 // Sends a float conversion value of a string to an initialized float pointer
-void FStringToFloat(float *pointer, const char *string)
+static void FStringToFloat(float *pointer, const char *string)
 {
     *pointer = (float)atof(string);
 }
 
 // Sends formatted output to an initialized string pointer
-void FFloatToString(char *buffer, float value)
+static void FFloatToString(char *buffer, float value)
 {
     sprintf(buffer, "%.3f", value);
 }
 
-// Returns 1 if a specific string is found in a text file
-int FSearch(char *filename, char *string)
-{
-	FILE *file;
-	int found = 0;
-	char temp[512];
-
-	file = fopen(filename, "r");
-
-    if (file != NULL)
-    {
-        while (fgets(temp, 512, file) != NULL) 
-        {
-            if ((strstr(temp, string)) != NULL)
-            {
-                found = 1;
-                break;
-            }
-        }
-
-        fclose(file);
-    }
-
-   	return found;
-}
+#endif  // FNODE_IMPLEMENTATION
