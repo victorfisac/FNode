@@ -1,3 +1,5 @@
+<img src="https://github.com/victorfisac/FNode/blob/master/src/icon/fnode.png">
+
 # FNode
 Tool based in nodes to build GLSL shaders without any programming knowledge written in C using OpenGL and GLFW (raylib library).
 
