@@ -59,7 +59,7 @@
 //----------------------------------------------------------------------------------
 // External Includes
 //----------------------------------------------------------------------------------
-#include <external/raylib/src/raylib.h>             // Required for window management, 2D camera drawing and inputs detection
+#include "external/raylib/src/raylib.h"             // Required for window management, 2D camera drawing and inputs detection
 
 //----------------------------------------------------------------------------------
 // Defines and Macros

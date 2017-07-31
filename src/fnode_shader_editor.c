@@ -46,8 +46,8 @@
 #define     MAX_TEXTURES                30                              // Shader maximum texture units
 #define     COMPILE_DURATION            120                             // Shader compile result duration
 #define     MODEL_PATH                  "res/meshes/plant.obj"          // Example model file path
-#define     MODEL_TEXTURE_DIFFUSE       "res/textures/plant.tga"        // Example model diffuse texture file path
-#define     MODEL_TEXTURE_WINDAMOUNT    "res/textures/plant_vc.tga"     // Example model diffuse wind amount texture file path
+#define     MODEL_TEXTURE_DIFFUSE       "res/textures/plant.png"        // Example model diffuse texture file path
+#define     MODEL_TEXTURE_WINDAMOUNT    "res/textures/plant_vc.png"     // Example model diffuse wind amount texture file path
 #define     FXAA_VERTEX                 "res/shaders/fxaa.vs"           // Visor FXAA vertex shader path
 #define     FXAA_FRAGMENT               "res/shaders/fxaa.fs"           // Visor FXAA fragment shader path
 #define     FXAA_SCREENSIZE_UNIFORM     "viewportSize"                  // Visor FXAA shader screen size uniform location name
