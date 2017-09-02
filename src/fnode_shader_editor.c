@@ -51,6 +51,7 @@
 #define     FXAA_VERTEX                 "res/shaders/fxaa.vs"               // Visor FXAA vertex shader path
 #define     FXAA_FRAGMENT               "res/shaders/fxaa.fs"               // Visor FXAA fragment shader path
 #define     FXAA_SCREENSIZE_UNIFORM     "viewportSize"                      // Visor FXAA shader screen size uniform location name
+#define     WINDOW_ICON                 "res/fnode_icon.png"                // FNode icon for window initialization
 
 //----------------------------------------------------------------------------------
 // Global Variables
@@ -91,6 +92,7 @@ bool backfaceCulling = false;               // Current shader backface culling s
 int compileState = -1;                      // Compile state (awiting, successful, failed)
 int framesCounter = 0;                      // Global frames counter
 int compileFrame = 0;                       // Compile time frames count
+Texture2D iconTex;                          // FNode icon texture used in help message
 
 //----------------------------------------------------------------------------------
 // Functions Declaration
@@ -1773,7 +1775,7 @@ void DrawInterface()
         DrawRectangle(5, 5, 450, 200, (Color){ 150, 150, 150, 150 });
         DrawRectangleLines(5, 5, 450, 200, BLACK);
         
-        DrawText("Welcome to FNode 1.0, adventurer!", 15, 15, 10, BLACK);
+        DrawText("Welcome to FNode, adventurer!", 15, 15, 10, BLACK);
         DrawText("Controls:", 15, 35, 10, BLACK);
         DrawText("- Drag Canvas/Node: LEFT MOUSE BUTTON", 35, 55, 10, BLACK);
         DrawText("- Drag Comment: LEFT ALT + LEFT MOUSE BUTTON (DRAG IN COMMENT)", 35, 75, 10, BLACK);
@@ -1781,7 +1783,10 @@ void DrawInterface()
         DrawText("- Delete Node/Line/Comment: RIGHT MOUSE BUTTON", 35, 115, 10, BLACK);
         DrawText("- Link: LEFT MOUSE BUTTON (INPUT/OUTPUT RECTANGLES)", 35, 135, 10, BLACK);
         DrawText("- Preview: RIGHT ALT BUTTON", 35, 155, 10, BLACK);
-        DrawText("More info at www.victorfisac.com/fnode", 15, 180, 10, BLACK);
+        DrawText("Credits: Victor Fisac [www.victorfisac.com]", 15, 180, 10, BLACK);
+        
+        Rectangle iconRect = (Rectangle){ 450 - iconTex.width/4, 200 - iconTex.height/4, iconTex.width/4, iconTex.height/4 };
+        DrawTexturePro(iconTex, (Rectangle){ 0, 0, iconTex.width, iconTex.height }, iconRect, (Vector2){ 0.0f, 0.0f }, 0.0f, WHITE);
     }
     else DrawText("Press 'H' to display HELP menu", 10, 10, 10, BLACK);
     
@@ -1945,9 +1950,10 @@ int main()
     // Initialization
     //--------------------------------------------------------------------------------------
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
-    InitWindow(screenSize.x, screenSize.y, "FNode Shader Editor [Victor Fisac - www.victorfisac.com]");
-    SetTargetFPS(60);
-    SetLineWidth(3);
+    InitWindow(screenSize.x, screenSize.y, "FNode - Visual scripting shader editor");
+    Image icon = LoadImage(WINDOW_ICON);
+    SetWindowIcon(icon);
+    iconTex = LoadTexture(WINDOW_ICON);
 
     // Load resources
     model = LoadModel(MODEL_PATH);
@@ -1971,6 +1977,9 @@ int main()
     InitFNode();
     CheckPreviousShader(true);
     UpdateCamera(&camera3d);
+
+    SetTargetFPS(60);
+    SetLineWidth(3);
     //--------------------------------------------------------------------------------------
 
     // Main game loop
@@ -2017,6 +2026,7 @@ int main()
 
     // De-Initialization
     //--------------------------------------------------------------------------------------
+    UnloadTexture(iconTex);
     UnloadRenderTexture(visorTarget);
     UnloadModel(model);
     UnloadShader(fxaa);
