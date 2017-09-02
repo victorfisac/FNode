@@ -18,19 +18,21 @@ out vec4 finalColor;
 
 // Constant and uniform values
 uniform sampler2D texture1;
-const vec4 node_21 = vec4(0.250, 1.000, 1.000, 0.000);
-const vec3 node_28 = vec3(0.000, 0.000, 0.200);
+const float node_12 = 0.000;
+const vec4 node_10 = vec4(0.250, 1.000, 1.000, 0.000);
+const vec3 node_05 = vec3(0.000, 0.000, 0.200);
 
 void main()
 {
-    vec3 node_24 = texture(texture1, fragTexCoord).rgb;
-    vec4 node_22 = vec4(fragNormal, 0.0);
-    float node_23 = dot(node_21, node_22);
-    vec3 node_26 = node_24*node_23;
-    vec3 node_27 = node_26 + node_28;
-    float node_30 = texture(texture1, fragTexCoord).a;
-    if (node_30 == 0.0) discard;
-    vec4 node_29 = vec4(node_27, node_30);
+    vec3 node_07 = texture(texture1, fragTexCoord).rgb;
+    vec3 node_09 = fragNormal;
+    vec4 node_11 = vec4(node_09, node_12);
+    float node_08 = dot(node_11, node_10);
+    vec3 node_06 = node_07*node_08;
+    vec3 node_04 = node_06 + node_05;
+    float node_03 = texture(texture1, fragTexCoord).a;
+    if (node_03 == 0.0) discard;
+    vec4 node_02 = vec4(node_04, node_03);
 
-    finalColor = node_29;
+    finalColor = node_02;
 }
