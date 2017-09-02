@@ -22,6 +22,10 @@
 # Debug files
 *.dSYM/
 
+# Source testing
+src/output/
+src/res/
+
 # =========================
 # Operating System Files
 # =========================
