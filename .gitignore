@@ -25,6 +25,7 @@
 # Source testing
 src/output/
 src/res/
+src/*.exe
 
 # =========================
 # Operating System Files
