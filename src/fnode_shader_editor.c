@@ -32,25 +32,25 @@
 //----------------------------------------------------------------------------------
 // Defines and Macros
 //----------------------------------------------------------------------------------
-#define     UI_PADDING                  5                               // Interface bounds padding with background
-#define     UI_PADDING_SCROLL           20                              // Interface scroll bar padding
-#define     UI_BUTTON_HEIGHT            30                              // Interface bounds height
-#define     UI_SCROLL                   20                              // Interface scroll sensitivity
-#define     UI_GRID_ALPHA               0.25f                           // Interface canvas background grid lines alpha
-#define     VISOR_MODEL_SCALE           11.0f                           // Visor model scale
-#define     VISOR_MODEL_ROTATION        0.0f                            // Visor model rotation speed
-#define     VISOR_BORDER                2                               // Visor window border width
-#define     VERTEX_PATH                 "output/shader.vs"              // Vertex shader output path
-#define     FRAGMENT_PATH               "output/shader.fs"              // Fragment shader output path
-#define     DATA_PATH                   "output/shader.fnode"           // Shader data output path
-#define     MAX_TEXTURES                30                              // Shader maximum texture units
-#define     COMPILE_DURATION            120                             // Shader compile result duration
-#define     MODEL_PATH                  "res/meshes/plant.obj"          // Example model file path
-#define     MODEL_TEXTURE_DIFFUSE       "res/textures/plant.png"        // Example model diffuse texture file path
-#define     MODEL_TEXTURE_WINDAMOUNT    "res/textures/plant_vc.png"     // Example model diffuse wind amount texture file path
-#define     FXAA_VERTEX                 "res/shaders/fxaa.vs"           // Visor FXAA vertex shader path
-#define     FXAA_FRAGMENT               "res/shaders/fxaa.fs"           // Visor FXAA fragment shader path
-#define     FXAA_SCREENSIZE_UNIFORM     "viewportSize"                  // Visor FXAA shader screen size uniform location name
+#define     UI_PADDING                  5                                   // Interface bounds padding with background
+#define     UI_PADDING_SCROLL           20                                  // Interface scroll bar padding
+#define     UI_BUTTON_HEIGHT            30                                  // Interface bounds height
+#define     UI_SCROLL                   20                                  // Interface scroll sensitivity
+#define     UI_GRID_ALPHA               0.25f                               // Interface canvas background grid lines alpha
+#define     VISOR_MODEL_SCALE           11.0f                               // Visor model scale
+#define     VISOR_MODEL_ROTATION        0.0f                                // Visor model rotation speed
+#define     VISOR_BORDER                2                                   // Visor window border width
+#define     VERTEX_PATH                 "output/shader.vs"                  // Vertex shader output path
+#define     FRAGMENT_PATH               "output/shader.fs"                  // Fragment shader output path
+#define     DATA_PATH                   "output/shader.fnode"               // Shader data output path
+#define     MAX_TEXTURES                30                                  // Shader maximum texture units
+#define     COMPILE_DURATION            120                                 // Shader compile result duration
+#define     MODEL_PATH                  "res/meshes/plant.obj"              // Example model file path
+#define     MODEL_TEXTURE_DIFFUSE       "res/textures/plant_color.png"      // Example model color texture file path
+#define     MODEL_TEXTURE_WINDAMOUNT    "res/textures/plant_motion.png"     // Example model motion texture file path
+#define     FXAA_VERTEX                 "res/shaders/fxaa.vs"               // Visor FXAA vertex shader path
+#define     FXAA_FRAGMENT               "res/shaders/fxaa.fs"               // Visor FXAA fragment shader path
+#define     FXAA_SCREENSIZE_UNIFORM     "viewportSize"                      // Visor FXAA shader screen size uniform location name
 
 //----------------------------------------------------------------------------------
 // Global Variables
