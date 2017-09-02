@@ -298,8 +298,7 @@ void UpdateScroll()
     {
         if (CheckCollisionPointRec(mousePosition, (Rectangle){ canvasSize.x - visorTarget.texture.width - UI_PADDING, screenSize.y - visorTarget.texture.height - UI_PADDING, visorTarget.texture.width, visorTarget.texture.height }))
         {
-            camera3d.position.z += GetMouseWheelMove()*0.25f;
-            camera3d.position.z = FClamp(camera3d.position.z, 2.5f, 6.0f);
+            UpdateCamera(&camera3d);
         }
         else if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, canvasSize.x, canvasSize.y }))
         {
@@ -313,7 +312,10 @@ void UpdateScroll()
             menuScrollRec.y = (menuScrollLimits.y - menuScrollLimits.x)*menuScroll/(scrollLimits.y - scrollLimits.x);
         }
     }
-
+    else if (CheckCollisionPointRec(mousePosition, (Rectangle){ canvasSize.x - visorTarget.texture.width - UI_PADDING, screenSize.y - visorTarget.texture.height - UI_PADDING, visorTarget.texture.width, visorTarget.texture.height }))
+    {
+        UpdateCamera(&camera3d);
+    }
     // Check mouse drag interface scrolling input
     if (scrollState == 0)
     {
@@ -1724,39 +1726,43 @@ void DrawCanvasGrid(int divisions)
 // Draws a visor with default model rotating and current shader
 void DrawVisor()
 {
-    // BeginTextureMode(visorTarget);
+    BeginTextureMode(visorTarget);
 
         DrawRectangle(0, 0, screenSize.x, screenSize.y, GRAY);
+
+        // Draw background title and credits
+        DrawText("FNODE 1.0", (canvasSize.x - MeasureText("FNODE 1.0", 120))/2, canvasSize.y/2 - 60, 120, Fade(LIGHTGRAY, UI_GRID_ALPHA*2));
+        DrawText("VICTOR FISAC", (canvasSize.x - MeasureText("VICTOR FISAC", 40))/2, canvasSize.y*0.65f - 20, 40, Fade(LIGHTGRAY, UI_GRID_ALPHA*2));
         
         BeginShaderMode(model.material.shader);
 
         Begin3dMode(camera3d);
 
-            DrawModelEx(model, (Vector3){ -1.0f, -1.0f, 0.0f }, (Vector3){ 0, 1, 0 }, modelRotation, (Vector3){ VISOR_MODEL_SCALE, VISOR_MODEL_SCALE, VISOR_MODEL_SCALE }, RED);
+            DrawModelEx(model, (Vector3){ 0.0f, -1.0f, 0.0f }, (Vector3){ 0, 1, 0 }, modelRotation, (Vector3){ VISOR_MODEL_SCALE, VISOR_MODEL_SCALE, VISOR_MODEL_SCALE }, RED);
 
         End3dMode();
         
         EndShaderMode();
 
-    // EndTextureMode();
+    EndTextureMode();
 
-    // Rectangle visor = { canvasSize.x - visorTarget.texture.width - UI_PADDING, screenSize.y - visorTarget.texture.height - UI_PADDING, visorTarget.texture.width, visorTarget.texture.height };
+    Rectangle visor = { canvasSize.x - visorTarget.texture.width - UI_PADDING, screenSize.y - visorTarget.texture.height - UI_PADDING, visorTarget.texture.width, visorTarget.texture.height };
     
-    /* if (fullVisor)
+    if (fullVisor)
     {
         visor.x = 0;
         visor.y = 0;
         visor.width = screenSize.x;
         visor.height = screenSize.y;
     }
-    
+
     DrawRectangle(visor.x - VISOR_BORDER, visor.y - VISOR_BORDER, visor.width + VISOR_BORDER*2, visor.height + VISOR_BORDER*2, BLACK);
 
     BeginShaderMode(fxaa);
 
         DrawTexturePro(visorTarget.texture, (Rectangle){ 0, 0, visorTarget.texture.width, -visorTarget.texture.height }, visor, (Vector2){ 0, 0 }, 0.0f, WHITE);
 
-    EndShaderMode(); */
+    EndShaderMode();
 }
 
 // Draw interface to create nodes
@@ -1955,7 +1961,8 @@ int main()
     // Initialize values
     camera = (Camera2D){ (Vector2){ 0, 0 }, (Vector2){ screenSize.x/2, screenSize.y/2 }, 0.0f, 1.0f };
     canvasSize = (Vector2){ screenSize.x*0.85f, screenSize.y };
-    camera3d = (Camera){{ 5.0f, 2.0f, 5.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, 45.0f };
+    camera3d = (Camera){{ 4.0f, 2.0f, 4.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, 45.0f };
+    SetCameraMode(camera3d, CAMERA_FREE);
     menuScrollRec = (Rectangle){ screenSize.x - 17, 5, 9, 30 };
 
     // Initialize shaders values
@@ -1963,6 +1970,7 @@ int main()
 
     InitFNode();
     CheckPreviousShader(true);
+    UpdateCamera(&camera3d);
     //--------------------------------------------------------------------------------------
 
     // Main game loop
@@ -1971,7 +1979,7 @@ int main()
         // Update
         //----------------------------------------------------------------------------------
         UpdateMouseData();
-        
+
         if (!settings)
         {
             UpdateInputsData();
@@ -1996,9 +2004,12 @@ int main()
         BeginDrawing();
 
             ClearBackground(RAYWHITE);
-            DrawCanvas();
-            if (fullVisor) DrawVisor();
-            DrawInterface();
+            if (!fullVisor)
+            {
+                DrawCanvas();
+                DrawInterface();
+            }
+            DrawVisor();
 
         EndDrawing();
         //----------------------------------------------------------------------------------

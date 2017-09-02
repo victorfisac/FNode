@@ -12,7 +12,7 @@ out vec3 fragNormal;
 out vec2 fragTexCoord;
 out vec4 fragColor;
 
-uniform mat4 mvpMatrix;
+uniform mat4 mvp;
 uniform float vertCurrentTime;
 
 // Constant and uniform values
@@ -28,7 +28,7 @@ void main()
     fragTexCoord = vertexTexCoord;
     fragColor = vertexColor;
 
-    mat4 node_18 = mvpMatrix;
+    mat4 node_18 = mvp;
     vec4 node_19 = vec4(vertexPosition, 1.0);
     vec4 node_04 = vec4(fragNormal, 0.0);
     vec4 node_03 = node_02 + node_04;
