@@ -38,7 +38,7 @@
 #define     UI_SCROLL                   20                              // Interface scroll sensitivity
 #define     UI_GRID_ALPHA               0.25f                           // Interface canvas background grid lines alpha
 #define     VISOR_MODEL_SCALE           11.0f                           // Visor model scale
-#define     VISOR_MODEL_ROTATION        0.2f                            // Visor model rotation speed
+#define     VISOR_MODEL_ROTATION        0.0f                            // Visor model rotation speed
 #define     VISOR_BORDER                2                               // Visor window border width
 #define     VERTEX_PATH                 "output/shader.vs"              // Vertex shader output path
 #define     FRAGMENT_PATH               "output/shader.fs"              // Fragment shader output path
@@ -124,10 +124,10 @@ bool CheckTextureExtension(char *filename);                 // Check filename fo
 // Functions Definition
 //----------------------------------------------------------------------------------
 // Check if there are a compatible shader in output folder
-void CheckPreviousShader()
+void CheckPreviousShader(bool makeGraph)
 {
     Shader previousShader = LoadShader(VERTEX_PATH, FRAGMENT_PATH);
-    if (previousShader.id != 0)
+    if (previousShader.id > 0)
     {
         shader = previousShader;
         model.material.shader = shader;
@@ -136,124 +136,127 @@ void CheckPreviousShader()
         timeUniformV = GetShaderLocation(shader, "vertCurrentTime");
         timeUniformF = GetShaderLocation(shader, "fragCurrentTime");
 
-        FILE *dataFile = fopen(DATA_PATH, "r");
-        if (dataFile != NULL)
+        if (makeGraph)
         {
-            float type = -1;
-            float inputs[MAX_INPUTS] = { -1, -1, -1, -1 };
-            float inputsCount = -1;
-            float inputsLimit = -1;
-            float dataCount = -1;
-            float property = -1;
-            float data[MAX_VALUES] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
-            float shapeX = -1;
-            float shapeY = -1;
-
-            while (fscanf(dataFile, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,\n", &type, &property,
-            &inputs[0], &inputs[1], &inputs[2], &inputs[3], &inputsCount, &inputsLimit, &dataCount, &data[0], &data[1], &data[2],
-            &data[3], &data[4], &data[5], &data[6], &data[7], &data[8], &data[9], &data[10], &data[11], &data[12], &data[13], &data[14],
-            &data[15], &shapeX, &shapeY) > 0)
-            {                
-                FNode newNode = InitializeNode(true);
-                newNode->type = type;
-                newNode->property = property;
-
-                if (type < FNODE_ADD) newNode->inputShape = (Rectangle){ 0, 0, 0, 0 };
-
-                switch ((int)type)
-                {
-                    case FNODE_PI: newNode->name = "Pi"; break;
-                    case FNODE_E: newNode->name = "e"; break;
-                    case FNODE_TIME: newNode->name = "Current Time"; break;
-                    case FNODE_VERTEXPOSITION: newNode->name = "Vertex Position"; break;
-                    case FNODE_VERTEXNORMAL: newNode->name = "Normal Direction"; break;
-                    case FNODE_FRESNEL: newNode->name = "Fresnel"; break;
-                    case FNODE_VIEWDIRECTION: newNode->name = "View Direction"; break;
-                    case FNODE_MVP: newNode->name = "MVP Matrix"; break;
-                    case FNODE_MATRIX: newNode->name = "Matrix 4x4"; break;
-                    case FNODE_VALUE: newNode->name = "Value"; break;
-                    case FNODE_VECTOR2: newNode->name = "Vector 2"; break;
-                    case FNODE_VECTOR3: newNode->name = "Vector 3"; break;
-                    case FNODE_VECTOR4: newNode->name = "Vector 4"; break;
-                    case FNODE_ADD: newNode->name = "Add"; break;
-                    case FNODE_SUBTRACT: newNode->name = "Subtract"; break;
-                    case FNODE_MULTIPLY: newNode->name = "Multiply"; break;
-                    case FNODE_DIVIDE: newNode->name = "Divide"; break;
-                    case FNODE_APPEND: newNode->name = "Append"; break;
-                    case FNODE_ONEMINUS: newNode->name = "One Minus"; break;
-                    case FNODE_ABS: newNode->name = "Abs"; break;
-                    case FNODE_COS:newNode->name = "Cos"; break;
-                    case FNODE_SIN: newNode->name = "Sin"; break;
-                    case FNODE_TAN: newNode->name = "Tan"; break;
-                    case FNODE_DEG2RAD: newNode->name = "Deg to Rad"; break;
-                    case FNODE_RAD2DEG: newNode->name = "Rad to Deg"; break;
-                    case FNODE_NORMALIZE: newNode->name = "Normalize"; break;
-                    case FNODE_NEGATE: newNode->name = "Negate"; break;
-                    case FNODE_RECIPROCAL: newNode->name = "Reciprocal"; break;
-                    case FNODE_SQRT: newNode->name = "Square Root"; break;
-                    case FNODE_TRUNC: newNode->name = "Trunc"; break;
-                    case FNODE_ROUND: newNode->name = "Round"; break;
-                    case FNODE_VERTEXCOLOR: newNode->name = "Vertex Color"; break;
-                    case FNODE_CEIL: newNode->name = "Ceil"; break;
-                    case FNODE_CLAMP01: newNode->name = "Clamp 0-1"; break;
-                    case FNODE_EXP2: newNode->name = "Exp 2"; break;
-                    case FNODE_POWER: newNode->name = "Power"; break;
-                    case FNODE_STEP: newNode->name = "Step"; break;
-                    case FNODE_POSTERIZE: newNode->name = "Posterize"; break;
-                    case FNODE_MAX: newNode->name = "Max"; break;
-                    case FNODE_MIN: newNode->name = "Min"; break;
-                    case FNODE_LERP: newNode->name = "Lerp"; break;
-                    case FNODE_SMOOTHSTEP: newNode->name = "Smooth Step"; break;
-                    case FNODE_CROSSPRODUCT: newNode->name = "Cross Product"; break;
-                    case FNODE_DESATURATE: newNode->name = "Desaturate"; break;
-                    case FNODE_DISTANCE: newNode->name = "Distance"; break;
-                    case FNODE_DOTPRODUCT: newNode->name = "Dot Product"; break;
-                    case FNODE_LENGTH: newNode->name = "Length"; break;
-                    case FNODE_MULTIPLYMATRIX: newNode->name = "Multiply Matrix"; break;
-                    case FNODE_TRANSPOSE: newNode->name = "Transpose"; break;
-                    case FNODE_PROJECTION: newNode->name = "Projection Vector"; break;
-                    case FNODE_REJECTION: newNode->name = "Rejection Vector"; break;
-                    case FNODE_HALFDIRECTION: newNode->name = "Half Direction"; break;
-                    case FNODE_SAMPLER2D: newNode->name = "Sampler 2D"; break;
-                    case FNODE_VERTEX: newNode->name = "[OUTPUT] Vertex Position"; break;
-                    case FNODE_FRAGMENT: newNode->name = "[OUTPUT] Fragment Color"; break;
-                    default: break;
-                }
-
-                for (int i = 0; i < MAX_INPUTS; i++) newNode->inputs[i] = inputs[i];
-
-                newNode->inputsCount = inputsCount;
-                newNode->inputsLimit = inputsLimit;
-
-                for (int i = 0; i < MAX_VALUES; i++)
-                {
-                    newNode->output.data[i].value = data[i];
-                    FFloatToString(newNode->output.data[i].valueText, newNode->output.data[i].value);
-                }
-
-                newNode->output.dataCount = dataCount;
-                newNode->shape.x = shapeX;
-                newNode->shape.y = shapeY;
-
-                UpdateNodeShapes(newNode);
-            }
-
-            int from = -1;
-            int to = -1;            
-            while (fscanf(dataFile, "?%i?%i\n", &from, &to) > 0)
+            FILE *dataFile = fopen(DATA_PATH, "r");
+            if (dataFile != NULL)
             {
-                tempLine = CreateNodeLine(from);
-                tempLine->to = to;
+                float type = -1;
+                float inputs[MAX_INPUTS] = { -1, -1, -1, -1 };
+                float inputsCount = -1;
+                float inputsLimit = -1;
+                float dataCount = -1;
+                float property = -1;
+                float data[MAX_VALUES] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+                float shapeX = -1;
+                float shapeY = -1;
+
+                while (fscanf(dataFile, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,\n", &type, &property,
+                &inputs[0], &inputs[1], &inputs[2], &inputs[3], &inputsCount, &inputsLimit, &dataCount, &data[0], &data[1], &data[2],
+                &data[3], &data[4], &data[5], &data[6], &data[7], &data[8], &data[9], &data[10], &data[11], &data[12], &data[13], &data[14],
+                &data[15], &shapeX, &shapeY) > 0)
+                {                
+                    FNode newNode = InitializeNode(true);
+                    newNode->type = type;
+                    newNode->property = property;
+
+                    if (type < FNODE_ADD) newNode->inputShape = (Rectangle){ 0, 0, 0, 0 };
+
+                    switch ((int)type)
+                    {
+                        case FNODE_PI: newNode->name = "Pi"; break;
+                        case FNODE_E: newNode->name = "e"; break;
+                        case FNODE_TIME: newNode->name = "Current Time"; break;
+                        case FNODE_VERTEXPOSITION: newNode->name = "Vertex Position"; break;
+                        case FNODE_VERTEXNORMAL: newNode->name = "Normal Direction"; break;
+                        case FNODE_FRESNEL: newNode->name = "Fresnel"; break;
+                        case FNODE_VIEWDIRECTION: newNode->name = "View Direction"; break;
+                        case FNODE_MVP: newNode->name = "MVP Matrix"; break;
+                        case FNODE_MATRIX: newNode->name = "Matrix 4x4"; break;
+                        case FNODE_VALUE: newNode->name = "Value"; break;
+                        case FNODE_VECTOR2: newNode->name = "Vector 2"; break;
+                        case FNODE_VECTOR3: newNode->name = "Vector 3"; break;
+                        case FNODE_VECTOR4: newNode->name = "Vector 4"; break;
+                        case FNODE_ADD: newNode->name = "Add"; break;
+                        case FNODE_SUBTRACT: newNode->name = "Subtract"; break;
+                        case FNODE_MULTIPLY: newNode->name = "Multiply"; break;
+                        case FNODE_DIVIDE: newNode->name = "Divide"; break;
+                        case FNODE_APPEND: newNode->name = "Append"; break;
+                        case FNODE_ONEMINUS: newNode->name = "One Minus"; break;
+                        case FNODE_ABS: newNode->name = "Abs"; break;
+                        case FNODE_COS:newNode->name = "Cos"; break;
+                        case FNODE_SIN: newNode->name = "Sin"; break;
+                        case FNODE_TAN: newNode->name = "Tan"; break;
+                        case FNODE_DEG2RAD: newNode->name = "Deg to Rad"; break;
+                        case FNODE_RAD2DEG: newNode->name = "Rad to Deg"; break;
+                        case FNODE_NORMALIZE: newNode->name = "Normalize"; break;
+                        case FNODE_NEGATE: newNode->name = "Negate"; break;
+                        case FNODE_RECIPROCAL: newNode->name = "Reciprocal"; break;
+                        case FNODE_SQRT: newNode->name = "Square Root"; break;
+                        case FNODE_TRUNC: newNode->name = "Trunc"; break;
+                        case FNODE_ROUND: newNode->name = "Round"; break;
+                        case FNODE_VERTEXCOLOR: newNode->name = "Vertex Color"; break;
+                        case FNODE_CEIL: newNode->name = "Ceil"; break;
+                        case FNODE_CLAMP01: newNode->name = "Clamp 0-1"; break;
+                        case FNODE_EXP2: newNode->name = "Exp 2"; break;
+                        case FNODE_POWER: newNode->name = "Power"; break;
+                        case FNODE_STEP: newNode->name = "Step"; break;
+                        case FNODE_POSTERIZE: newNode->name = "Posterize"; break;
+                        case FNODE_MAX: newNode->name = "Max"; break;
+                        case FNODE_MIN: newNode->name = "Min"; break;
+                        case FNODE_LERP: newNode->name = "Lerp"; break;
+                        case FNODE_SMOOTHSTEP: newNode->name = "Smooth Step"; break;
+                        case FNODE_CROSSPRODUCT: newNode->name = "Cross Product"; break;
+                        case FNODE_DESATURATE: newNode->name = "Desaturate"; break;
+                        case FNODE_DISTANCE: newNode->name = "Distance"; break;
+                        case FNODE_DOTPRODUCT: newNode->name = "Dot Product"; break;
+                        case FNODE_LENGTH: newNode->name = "Length"; break;
+                        case FNODE_MULTIPLYMATRIX: newNode->name = "Multiply Matrix"; break;
+                        case FNODE_TRANSPOSE: newNode->name = "Transpose"; break;
+                        case FNODE_PROJECTION: newNode->name = "Projection Vector"; break;
+                        case FNODE_REJECTION: newNode->name = "Rejection Vector"; break;
+                        case FNODE_HALFDIRECTION: newNode->name = "Half Direction"; break;
+                        case FNODE_SAMPLER2D: newNode->name = "Sampler 2D"; break;
+                        case FNODE_VERTEX: newNode->name = "[OUTPUT] Vertex Position"; break;
+                        case FNODE_FRAGMENT: newNode->name = "[OUTPUT] Fragment Color"; break;
+                        default: break;
+                    }
+
+                    for (int i = 0; i < MAX_INPUTS; i++) newNode->inputs[i] = inputs[i];
+
+                    newNode->inputsCount = inputsCount;
+                    newNode->inputsLimit = inputsLimit;
+
+                    for (int i = 0; i < MAX_VALUES; i++)
+                    {
+                        newNode->output.data[i].value = data[i];
+                        FFloatToString(newNode->output.data[i].valueText, newNode->output.data[i].value);
+                    }
+
+                    newNode->output.dataCount = dataCount;
+                    newNode->shape.x = shapeX;
+                    newNode->shape.y = shapeY;
+
+                    UpdateNodeShapes(newNode);
+                }
+
+                int from = -1;
+                int to = -1;            
+                while (fscanf(dataFile, "?%i?%i\n", &from, &to) > 0)
+                {
+                    tempLine = CreateNodeLine(from);
+                    tempLine->to = to;
+                }
+
+                for (int i = 0; i < nodesCount; i++) UpdateNodeShapes(nodes[i]);
+                CalculateValues();
+                for (int i = 0; i < nodesCount; i++) UpdateNodeShapes(nodes[i]);
+
+                loadedShader = true;
+                fclose(dataFile);
             }
-
-            for (int i = 0; i < nodesCount; i++) UpdateNodeShapes(nodes[i]);
-            CalculateValues();
-            for (int i = 0; i < nodesCount; i++) UpdateNodeShapes(nodes[i]);
-
-            loadedShader = true;
-            fclose(dataFile);
+            else TraceLogFNode(false, "error when trying to open previous shader data file");
         }
-        else TraceLogFNode(false, "error when trying to open previous shader data file");
     }
 
     if (!loadedShader)
@@ -275,8 +278,6 @@ void UpdateMouseData()
 // Updates current inputs states
 void UpdateInputsData()
 {
-    // if (IsKeyPressed('P')) debugMode = !debugMode;
-
     if (IsKeyPressed('H')) help = !help;
     else if (IsKeyPressed(KEY_RIGHT_ALT))
     {
@@ -963,13 +964,13 @@ void UpdateShaderData()
             if (textures[loadedFiles].id != 0) UnloadTexture(textures[loadedFiles]);
             textures[loadedFiles] = LoadTexture(path);
             
-            if (shader.id != 0)
+            if (shader.id > 0)
             {
                 switch (loadedFiles)
                 {
-                    case 0: model.material.texDiffuse = textures[loadedFiles]; break;
-                    case 1: model.material.texNormal = textures[loadedFiles]; break;
-                    case 2: model.material.texSpecular = textures[loadedFiles]; break;
+                    case 0: model.material.maps[MAP_ALBEDO].texture = textures[loadedFiles]; break;
+                    case 1: model.material.maps[MAP_NORMAL].texture = textures[loadedFiles]; break;
+                    case 2: model.material.maps[MAP_SPECULAR].texture = textures[loadedFiles]; break;
                     default: break;
                 }
             }
@@ -983,19 +984,37 @@ void UpdateShaderData()
         filesCount = 0;
     }
 
-    if (shader.id != 0)
+    if (shader.id > 0)
     {
-        Vector3 viewVector = { camera3d.position.x - camera3d.target.x, camera3d.position.y - camera3d.target.y, camera3d.position.z - camera3d.target.z };
-        viewVector = FVector3Normalize(viewVector);
-        float viewDir[3] = {  viewVector.x, viewVector.y, viewVector.z };
-        SetShaderValue(shader, viewUniform, viewDir, 3);
+        // Check if view direction is used in shader
+        if (viewUniform != -1)
+        {
+            // Convert view vector to float array and send it to shader
+            Vector3 viewVector = { camera3d.position.x - camera3d.target.x, camera3d.position.y - camera3d.target.y, camera3d.position.z - camera3d.target.z };
+            viewVector = FVector3Normalize(viewVector);
+            float viewDir[3] = {  viewVector.x, viewVector.y, viewVector.z };
+            SetShaderValue(shader, viewUniform, viewDir, 3);
+        }
 
-        SetShaderValueMatrix(shader, transformUniform, model.transform);
+        // Check if model transform matrix is used in shader and send it if needed
+        if (transformUniform != -1) SetShaderValueMatrix(shader, transformUniform, model.transform);
 
-        float time[1] = { currentTime };
-        SetShaderValue(shader, timeUniformV, time, 1);
-        SetShaderValue(shader, timeUniformF, time, 1);
-        
+        // Check if current time is used in vertex shader
+        if (timeUniformV != -1)
+        {
+            // Convert time value to float array and send it to shader
+            float time[1] = { currentTime };
+            SetShaderValue(shader, timeUniformV, time, 1);
+        }
+ 
+        // Check if current time is used in fragment shader
+        if (timeUniformF != -1)
+        {
+            // Convert time value to float array and send it to shader
+            float time[1] = { currentTime };
+            SetShaderValue(shader, timeUniformF, time, 1);
+        }
+
         float resolution[2] = { (fullVisor ? screenSize.x : (screenSize.x/4)), (fullVisor ? screenSize.y : (screenSize.y/4)) };
         SetShaderValue(fxaa, fxaaUniform, resolution, 2);
     }
@@ -1005,13 +1024,18 @@ void UpdateShaderData()
 void CompileShader()
 {
     // Reset previous compiled shader data
-    if (loadedShader) UnloadShader(shader);
+    if (loadedShader || (shader.id > 0)) UnloadShader(shader);
     remove(DATA_PATH);
     remove(VERTEX_PATH);
     remove(FRAGMENT_PATH);
+    model.material.shader = GetShaderDefault();
     for (int i = 0; i < MAX_TEXTURES; i++) usedUnits[i] = false;
     compileState = -1;
     compileFrame = 0;
+    viewUniform = -1;
+    transformUniform = -1;
+    timeUniformV = -1;
+    timeUniformF = -1;
 
     // Open shader data file
     FILE *dataFile = fopen(DATA_PATH, "w");
@@ -1134,7 +1158,7 @@ void CompileShader()
         }
 
         const char vUniforms[] = 
-        "uniform mat4 mvpMatrix;\n"
+        "uniform mat4 mvp;\n"
         "uniform float vertCurrentTime;\n\n";
         fprintf(vertexFile, vUniforms);
         
@@ -1273,21 +1297,10 @@ void CompileShader()
     }
     else TraceLogFNode(true, "error when trying to open and write in vertex shader file");
 
-    shader = LoadShader(VERTEX_PATH, FRAGMENT_PATH);
-    if (shader.id != 0)
-    {
-        loadedShader = true;
-        model.material.shader = shader;
-        viewUniform = GetShaderLocation(shader, "viewDirection");
-        transformUniform = GetShaderLocation(shader, "modelMatrix");
-        timeUniformV = GetShaderLocation(shader, "vertCurrentTime");
-        timeUniformF = GetShaderLocation(shader, "fragCurrentTime");
-        
-        compileState = 1;
-    }
-    else compileState = 0;
-
+    compileState = 1;
     compileFrame = framesCounter;
+
+    CheckPreviousShader(false);
 }
 
 // Check nodes searching for constant values to define them in shaders
@@ -1374,12 +1387,7 @@ void CompileNode(FNode node, FILE *file, bool fragment)
         {
             case 1: sprintf(check, "float node_%02i", node->id); break;
             case 2: sprintf(check, "vec2 node_%02i", node->id); break;
-            case 3:
-            {
-                if (fragment) sprintf(check, "vec3 node_%02i", node->id);
-                else if (node->type == FNODE_VERTEXPOSITION) sprintf(check, "vec4 node_%02i", node->id); 
-                else sprintf(check, "vec3 node_%02i", node->id); 
-            } break;
+            case 3: sprintf(check, "vec3 node_%02i", node->id); break;
             case 4: sprintf(check, "vec4 node_%02i", node->id); break;
             case 16: sprintf(check, "mat4 node_%02i", node->id); break;
             default: break;
@@ -1395,11 +1403,7 @@ void CompileNode(FNode node, FILE *file, bool fragment)
             {
                 case 1: sprintf(definition, "    float node_%02i = ", node->id); break;
                 case 2: sprintf(definition, "    vec2 node_%02i = ", node->id); break;
-                case 3:
-                {
-                    if (node->type == FNODE_VERTEXNORMAL) sprintf(definition, "    vec4 node_%02i = ", node->id);
-                    else sprintf(definition, "    vec3 node_%02i = ", node->id);
-                } break;
+                case 3: sprintf(definition, "    vec3 node_%02i = ", node->id); break;
                 case 4: sprintf(definition, "    vec4 node_%02i = ", node->id); break;
                 case 16: sprintf(definition, "    mat4 node_%02i = ", node->id); break;
                 default: break;
@@ -1418,12 +1422,16 @@ void CompileNode(FNode node, FILE *file, bool fragment)
                     case FNODE_VERTEXPOSITION:
                     {
                         if (fragment) strcat(body, "fragPosition;\n");
-                        else strcat(body, "vec4(vertexPosition, 1.0);\n");
+                        else strcat(body, "vertexPosition;\n");
                     } break;
-                    case FNODE_VERTEXNORMAL: strcat(body, "vec4(fragNormal, 0.0);\n"); break;
-                    case FNODE_FRESNEL: strcat(body, "1 - dot(fragNormal, viewDirection);\n"); break;
+                    case FNODE_VERTEXNORMAL:
+                    {
+                        if (fragment) strcat(body, "fragNormal;\n");
+                        else strcat(body, "vertexNormal;\n");
+                    } break;
+                    case FNODE_FRESNEL: strcat(body, "1.0 - dot(fragNormal, viewDirection);\n"); break;
                     case FNODE_VIEWDIRECTION: strcat(body, "viewDirection;\n"); break;
-                    case FNODE_MVP: strcat(body, "mvpMatrix;\n"); break;
+                    case FNODE_MVP: strcat(body, "mvp;\n"); break;
                     case FNODE_SAMPLER2D:
                     {
                         char test[128] = { '\0' };
@@ -1527,7 +1535,7 @@ void CompileNode(FNode node, FILE *file, bool fragment)
                             strcat(temp, append);
                         }
                     } break;
-                    case FNODE_ONEMINUS: sprintf(temp, "(1 - node_%02i);\n", node->inputs[0]); break;
+                    case FNODE_ONEMINUS: sprintf(temp, "(1.0 - node_%02i);\n", node->inputs[0]); break;
                     case FNODE_ABS: sprintf(temp, "abs(node_%02i);\n", node->inputs[0]); break;
                     case FNODE_COS: sprintf(temp, "cos(node_%02i);\n", node->inputs[0]); break;
                     case FNODE_SIN: sprintf(temp, "sin(node_%02i);\n", node->inputs[0]); break;
@@ -1536,7 +1544,7 @@ void CompileNode(FNode node, FILE *file, bool fragment)
                     case FNODE_RAD2DEG: sprintf(temp, "node_%02i*(180.0/3.14159265358979323846);\n", node->inputs[0]); break;
                     case FNODE_NORMALIZE: sprintf(temp, "normalize(node_%02i);\n", node->inputs[0]); break;
                     case FNODE_NEGATE: sprintf(temp, "node_%02i*-1;\n", node->inputs[0]); break;
-                    case FNODE_RECIPROCAL: sprintf(temp, "1/node_%02i;\n", node->inputs[0]); break;
+                    case FNODE_RECIPROCAL: sprintf(temp, "1.0/node_%02i;\n", node->inputs[0]); break;
                     case FNODE_SQRT: sprintf(temp, "sqrt(node_%02i);\n", node->inputs[0]); break;
                     case FNODE_TRUNC: sprintf(temp, "trunc(node_%02i);\n", node->inputs[0]); break;
                     case FNODE_ROUND: sprintf(temp, "round(node_%02i);\n", node->inputs[0]); break;
@@ -1668,7 +1676,9 @@ void ClearGraph()
 
 // Draw canvas space to create nodes
 void DrawCanvas()
-{    
+{
+    BeginShaderMode(GetShaderDefault());
+    
     // Draw background title and credits
     DrawText("FNODE 1.0", (canvasSize.x - MeasureText("FNODE 1.0", 120))/2, canvasSize.y/2 - 60, 120, Fade(LIGHTGRAY, UI_GRID_ALPHA*2));
     DrawText("VICTOR FISAC", (canvasSize.x - MeasureText("VICTOR FISAC", 40))/2, canvasSize.y*0.65f - 20, 40, Fade(LIGHTGRAY, UI_GRID_ALPHA*2));
@@ -1683,6 +1693,8 @@ void DrawCanvas()
         for (int i = 0; i < linesCount; i++) DrawNodeLine(lines[i]);
 
     End2dMode();
+    
+    EndShaderMode();
 }
 
 // Draw canvas grid with a specific number of divisions for horizontal and vertical lines
@@ -1712,21 +1724,25 @@ void DrawCanvasGrid(int divisions)
 // Draws a visor with default model rotating and current shader
 void DrawVisor()
 {
-    BeginTextureMode(visorTarget);
-    
+    // BeginTextureMode(visorTarget);
+
         DrawRectangle(0, 0, screenSize.x, screenSize.y, GRAY);
+        
+        BeginShaderMode(model.material.shader);
 
         Begin3dMode(camera3d);
 
-            DrawModelEx(model, (Vector3){ 0.0f, -1.0f, 0.0f }, (Vector3){ 0, 1, 0 }, modelRotation, (Vector3){ VISOR_MODEL_SCALE, VISOR_MODEL_SCALE, VISOR_MODEL_SCALE }, RED);
+            DrawModelEx(model, (Vector3){ -1.0f, -1.0f, 0.0f }, (Vector3){ 0, 1, 0 }, modelRotation, (Vector3){ VISOR_MODEL_SCALE, VISOR_MODEL_SCALE, VISOR_MODEL_SCALE }, RED);
 
         End3dMode();
+        
+        EndShaderMode();
 
-    EndTextureMode();
+    // EndTextureMode();
 
-    Rectangle visor = { canvasSize.x - visorTarget.texture.width - UI_PADDING, screenSize.y - visorTarget.texture.height - UI_PADDING, visorTarget.texture.width, visorTarget.texture.height };
+    // Rectangle visor = { canvasSize.x - visorTarget.texture.width - UI_PADDING, screenSize.y - visorTarget.texture.height - UI_PADDING, visorTarget.texture.width, visorTarget.texture.height };
     
-    if (fullVisor)
+    /* if (fullVisor)
     {
         visor.x = 0;
         visor.y = 0;
@@ -1740,7 +1756,7 @@ void DrawVisor()
 
         DrawTexturePro(visorTarget.texture, (Rectangle){ 0, 0, visorTarget.texture.width, -visorTarget.texture.height }, visor, (Vector2){ 0, 0 }, 0.0f, WHITE);
 
-    EndShaderMode();
+    EndShaderMode(); */
 }
 
 // Draw interface to create nodes
@@ -1828,8 +1844,8 @@ void DrawInterface()
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Half Direction")) CreateNodeOperator(FNODE_HALFDIRECTION, "Half Direction", 2);
 
     DrawText("Geometry Data", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Geometry Data", 10))/2 - UI_PADDING_SCROLL/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, 10, WHITE); menuOffset++;
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vertex Position")) CreateNodeUniform(FNODE_VERTEXPOSITION, "Vertex Position", 4);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Normal Direction")) CreateNodeUniform(FNODE_VERTEXNORMAL, "Normal Direction", 4);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vertex Position")) CreateNodeUniform(FNODE_VERTEXPOSITION, "Vertex Position", 3);
+    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Normal Direction")) CreateNodeUniform(FNODE_VERTEXNORMAL, "Normal Direction", 3);
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vertex Color")) CreateNodeOperator(FNODE_VERTEXCOLOR, "Vertex Color", 1);
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "View Direction")) CreateNodeUniform(FNODE_VIEWDIRECTION, "View Direction", 3);
     if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Fresnel")) CreateNodeUniform(FNODE_FRESNEL, "Fresnel", 1);
@@ -1893,29 +1909,6 @@ void DrawInterface()
         Rectangle compileRec = { UI_PADDING, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT };
         DrawRectangleRec(compileRec, ((compileState == 1) ? Fade(GREEN, 0.5f) : Fade(RED, 0.5f)));
     }
-
-    if (debugMode)
-    {
-        const char *string = 
-        "loadedShader: %i\n"
-        "selectedNode: %i\n"
-        "editNode: %i\n"
-        "lineState: %i\n"
-        "commentState: %i\n"
-        "selectedComment: %i\n"
-        "editSize: %i\n"
-        "editSizeType: %i\n"
-        "editComment: %i\n"
-        "editNodeText: %s\n"
-        "loadedFiles: %i\n"
-        "settings: %i\n"
-        "compileState: %i\n"
-        "backfaceCulling: %i\n";
-
-        DrawText(FormatText(string, loadedShader, selectedNode, editNode, lineState, commentState, selectedComment, editSize, editSizeType, editComment, ((editNodeText != NULL) ? editNodeText : "NULL"), loadedFiles, settings, compileState, backfaceCulling), 10, 30, 10, BLACK);
-
-        DrawFPS(10, 10);
-    }
 }
 
 // Returns the extension of a file
@@ -1956,20 +1949,20 @@ int main()
     fxaa = LoadShader(FXAA_VERTEX, FXAA_FRAGMENT);
     textures[0] = LoadTexture(MODEL_TEXTURE_WINDAMOUNT);
     textures[1] = LoadTexture(MODEL_TEXTURE_DIFFUSE);
-    model.material.texDiffuse = textures[0];
-    model.material.texNormal = textures[1];
+    model.material.maps[MAP_ALBEDO].texture = textures[0];
+    model.material.maps[MAP_NORMAL].texture = textures[1];
 
     // Initialize values
     camera = (Camera2D){ (Vector2){ 0, 0 }, (Vector2){ screenSize.x/2, screenSize.y/2 }, 0.0f, 1.0f };
     canvasSize = (Vector2){ screenSize.x*0.85f, screenSize.y };
-    camera3d = (Camera){{ 0.0f, 0.0f, 4.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, 45.0f };
+    camera3d = (Camera){{ 5.0f, 2.0f, 5.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, 45.0f };
     menuScrollRec = (Rectangle){ screenSize.x - 17, 5, 9, 30 };
 
     // Initialize shaders values
     fxaaUniform = GetShaderLocation(fxaa, FXAA_SCREENSIZE_UNIFORM);
 
     InitFNode();
-    CheckPreviousShader();
+    CheckPreviousShader(true);
     //--------------------------------------------------------------------------------------
 
     // Main game loop
@@ -2004,7 +1997,7 @@ int main()
 
             ClearBackground(RAYWHITE);
             DrawCanvas();
-            DrawVisor();
+            if (fullVisor) DrawVisor();
             DrawInterface();
 
         EndDrawing();
