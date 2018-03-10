@@ -23,6 +23,7 @@
 *.dSYM/
 
 # Source testing
+release/output/
 src/output/
 src/res/
 src/fnode_shader_editor.exe
