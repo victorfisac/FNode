@@ -1,4 +1,4 @@
-<img src="https://github.com/victorfisac/FNode/blob/master/src/icon/fnode.png">
+<img src="https://github.com/victorfisac/FNode/blob/master/release/res/fnode_icon.png">
 
 # FNode
 Tool based in nodes to build GLSL shaders without any programming knowledge written in C using OpenGL and GLFW (raylib library). It contains a compilation pipeline to convert the nodes web into a GLSL vertex and fragment shader files.
@@ -10,9 +10,9 @@ Installation
 
 rPBR requires raylib. To get it, follow the next steps:
 
-    * Go to [raylib](https://www.github.com/raysan5/raylib) and clone the repository.
-    * Ensure to pull the last changes of 'master' branch.
-    * Use code inside examples header comments to compile and execute.
+* Go to [raylib](https://github.com/raysan5/raylib) and clone the repository.
+* Ensure to pull the last changes of 'master' branch.
+* Use code inside examples header comments to compile and execute.
 
 Notes
 ------
