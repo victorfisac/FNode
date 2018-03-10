@@ -4,7 +4,7 @@
 *
 *   LICENSE: zlib/libpng
 *
-*   Copyright (c) 2016 Victor Fisac
+*   Copyright (c) 2016-2018 Victor Fisac
 *
 *   This software is provided "as-is", without any express or implied warranty. In no event
 *   will the authors be held liable for any damages arising from the use of this software.
@@ -43,6 +43,9 @@
 #define     VERTEX_PATH                 "output/shader.vs"                  // Vertex shader output path
 #define     FRAGMENT_PATH               "output/shader.fs"                  // Fragment shader output path
 #define     DATA_PATH                   "output/shader.fnode"               // Shader data output path
+#define     EXAMPLE_VERTEX_PATH         "example/shader.vs"                 // Vertex shader output path of start example
+#define     EXAMPLE_FRAGMENT_PATH       "example/shader.fs"                 // Fragment shader output path of start example
+#define     EXAMPLE_DATA_PATH           "example/shader.fnode"              // Shader data output path of start example
 #define     MAX_TEXTURES                30                                  // Shader maximum texture units
 #define     COMPILE_DURATION            120                                 // Shader compile result duration
 #define     MODEL_PATH                  "res/meshes/plant.obj"              // Example model file path
@@ -98,6 +101,7 @@ Texture2D iconTex;                          // FNode icon texture used in help m
 // Functions Declaration
 //----------------------------------------------------------------------------------
 void CheckPreviousShader();                                 // Check if there are a compatible shader in output folder
+void LoadDefaultProject();                                  // Loads example project nodes and shader
 void UpdateMouseData();                                     // Updates current mouse position and delta position
 void UpdateInputsData();                                    // Updates current inputs states
 void UpdateScroll();                                        // Updates mouse scrolling for menu and canvas drag
@@ -258,6 +262,142 @@ void CheckPreviousShader(bool makeGraph)
                 fclose(dataFile);
             }
             else TraceLogFNode(false, "error when trying to open previous shader data file");
+        }
+    }
+    else LoadDefaultProject();
+
+    if (!loadedShader) LoadDefaultProject();
+}
+
+// Loads the default project nodes and shader
+void LoadDefaultProject()
+{
+    Shader previousShader = LoadShader(EXAMPLE_VERTEX_PATH, EXAMPLE_FRAGMENT_PATH);
+    if (previousShader.id > 0)
+    {
+        shader = previousShader;
+        model.material.shader = shader;
+        viewUniform = GetShaderLocation(shader, "viewDirection");
+        transformUniform = GetShaderLocation(shader, "modelMatrix");
+        timeUniformV = GetShaderLocation(shader, "vertCurrentTime");
+        timeUniformF = GetShaderLocation(shader, "fragCurrentTime");
+
+        FILE *dataFile = fopen(EXAMPLE_DATA_PATH, "r");
+        if (dataFile != NULL)
+        {
+            float type = -1;
+            float inputs[MAX_INPUTS] = { -1, -1, -1, -1 };
+            float inputsCount = -1;
+            float inputsLimit = -1;
+            float dataCount = -1;
+            float property = -1;
+            float data[MAX_VALUES] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+            float shapeX = -1;
+            float shapeY = -1;
+
+            while (fscanf(dataFile, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,\n", &type, &property,
+            &inputs[0], &inputs[1], &inputs[2], &inputs[3], &inputsCount, &inputsLimit, &dataCount, &data[0], &data[1], &data[2],
+            &data[3], &data[4], &data[5], &data[6], &data[7], &data[8], &data[9], &data[10], &data[11], &data[12], &data[13], &data[14],
+            &data[15], &shapeX, &shapeY) > 0)
+            {                
+                FNode newNode = InitializeNode(true);
+                newNode->type = type;
+                newNode->property = property;
+
+                if (type < FNODE_ADD) newNode->inputShape = (Rectangle){ 0, 0, 0, 0 };
+
+                switch ((int)type)
+                {
+                    case FNODE_PI: newNode->name = "Pi"; break;
+                    case FNODE_E: newNode->name = "e"; break;
+                    case FNODE_TIME: newNode->name = "Current Time"; break;
+                    case FNODE_VERTEXPOSITION: newNode->name = "Vertex Position"; break;
+                    case FNODE_VERTEXNORMAL: newNode->name = "Normal Direction"; break;
+                    case FNODE_FRESNEL: newNode->name = "Fresnel"; break;
+                    case FNODE_VIEWDIRECTION: newNode->name = "View Direction"; break;
+                    case FNODE_MVP: newNode->name = "MVP Matrix"; break;
+                    case FNODE_MATRIX: newNode->name = "Matrix 4x4"; break;
+                    case FNODE_VALUE: newNode->name = "Value"; break;
+                    case FNODE_VECTOR2: newNode->name = "Vector 2"; break;
+                    case FNODE_VECTOR3: newNode->name = "Vector 3"; break;
+                    case FNODE_VECTOR4: newNode->name = "Vector 4"; break;
+                    case FNODE_ADD: newNode->name = "Add"; break;
+                    case FNODE_SUBTRACT: newNode->name = "Subtract"; break;
+                    case FNODE_MULTIPLY: newNode->name = "Multiply"; break;
+                    case FNODE_DIVIDE: newNode->name = "Divide"; break;
+                    case FNODE_APPEND: newNode->name = "Append"; break;
+                    case FNODE_ONEMINUS: newNode->name = "One Minus"; break;
+                    case FNODE_ABS: newNode->name = "Abs"; break;
+                    case FNODE_COS:newNode->name = "Cos"; break;
+                    case FNODE_SIN: newNode->name = "Sin"; break;
+                    case FNODE_TAN: newNode->name = "Tan"; break;
+                    case FNODE_DEG2RAD: newNode->name = "Deg to Rad"; break;
+                    case FNODE_RAD2DEG: newNode->name = "Rad to Deg"; break;
+                    case FNODE_NORMALIZE: newNode->name = "Normalize"; break;
+                    case FNODE_NEGATE: newNode->name = "Negate"; break;
+                    case FNODE_RECIPROCAL: newNode->name = "Reciprocal"; break;
+                    case FNODE_SQRT: newNode->name = "Square Root"; break;
+                    case FNODE_TRUNC: newNode->name = "Trunc"; break;
+                    case FNODE_ROUND: newNode->name = "Round"; break;
+                    case FNODE_VERTEXCOLOR: newNode->name = "Vertex Color"; break;
+                    case FNODE_CEIL: newNode->name = "Ceil"; break;
+                    case FNODE_CLAMP01: newNode->name = "Clamp 0-1"; break;
+                    case FNODE_EXP2: newNode->name = "Exp 2"; break;
+                    case FNODE_POWER: newNode->name = "Power"; break;
+                    case FNODE_STEP: newNode->name = "Step"; break;
+                    case FNODE_POSTERIZE: newNode->name = "Posterize"; break;
+                    case FNODE_MAX: newNode->name = "Max"; break;
+                    case FNODE_MIN: newNode->name = "Min"; break;
+                    case FNODE_LERP: newNode->name = "Lerp"; break;
+                    case FNODE_SMOOTHSTEP: newNode->name = "Smooth Step"; break;
+                    case FNODE_CROSSPRODUCT: newNode->name = "Cross Product"; break;
+                    case FNODE_DESATURATE: newNode->name = "Desaturate"; break;
+                    case FNODE_DISTANCE: newNode->name = "Distance"; break;
+                    case FNODE_DOTPRODUCT: newNode->name = "Dot Product"; break;
+                    case FNODE_LENGTH: newNode->name = "Length"; break;
+                    case FNODE_MULTIPLYMATRIX: newNode->name = "Multiply Matrix"; break;
+                    case FNODE_TRANSPOSE: newNode->name = "Transpose"; break;
+                    case FNODE_PROJECTION: newNode->name = "Projection Vector"; break;
+                    case FNODE_REJECTION: newNode->name = "Rejection Vector"; break;
+                    case FNODE_HALFDIRECTION: newNode->name = "Half Direction"; break;
+                    case FNODE_SAMPLER2D: newNode->name = "Sampler 2D"; break;
+                    case FNODE_VERTEX: newNode->name = "[OUTPUT] Vertex Position"; break;
+                    case FNODE_FRAGMENT: newNode->name = "[OUTPUT] Fragment Color"; break;
+                    default: break;
+                }
+
+                for (int i = 0; i < MAX_INPUTS; i++) newNode->inputs[i] = inputs[i];
+
+                newNode->inputsCount = inputsCount;
+                newNode->inputsLimit = inputsLimit;
+
+                for (int i = 0; i < MAX_VALUES; i++)
+                {
+                    newNode->output.data[i].value = data[i];
+                    FFloatToString(newNode->output.data[i].valueText, newNode->output.data[i].value);
+                }
+
+                newNode->output.dataCount = dataCount;
+                newNode->shape.x = shapeX;
+                newNode->shape.y = shapeY;
+
+                UpdateNodeShapes(newNode);
+            }
+
+            int from = -1;
+            int to = -1;            
+            while (fscanf(dataFile, "?%i?%i\n", &from, &to) > 0)
+            {
+                tempLine = CreateNodeLine(from);
+                tempLine->to = to;
+            }
+
+            for (int i = 0; i < nodesCount; i++) UpdateNodeShapes(nodes[i]);
+            CalculateValues();
+            for (int i = 0; i < nodesCount; i++) UpdateNodeShapes(nodes[i]);
+
+            loadedShader = true;
+            fclose(dataFile);
         }
     }
 
@@ -973,8 +1113,8 @@ void UpdateShaderData()
                 switch (loadedFiles)
                 {
                     case 0: model.material.maps[MAP_ALBEDO].texture = textures[loadedFiles]; break;
-                    case 1: model.material.maps[MAP_NORMAL].texture = textures[loadedFiles]; break;
-                    case 2: model.material.maps[MAP_SPECULAR].texture = textures[loadedFiles]; break;
+                    case 1: model.material.maps[MAP_SPECULAR].texture = textures[loadedFiles]; break;
+                    case 2: model.material.maps[MAP_NORMAL].texture = textures[loadedFiles]; break;
                     default: break;
                 }
             }
@@ -1951,8 +2091,6 @@ int main()
     //--------------------------------------------------------------------------------------
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
     InitWindow(screenSize.x, screenSize.y, "FNode - Visual scripting shader editor");
-    Image icon = LoadImage(WINDOW_ICON);
-    SetWindowIcon(icon);
     iconTex = LoadTexture(WINDOW_ICON);
 
     // Load resources
@@ -1962,7 +2100,7 @@ int main()
     textures[0] = LoadTexture(MODEL_TEXTURE_WINDAMOUNT);
     textures[1] = LoadTexture(MODEL_TEXTURE_DIFFUSE);
     model.material.maps[MAP_ALBEDO].texture = textures[0];
-    model.material.maps[MAP_NORMAL].texture = textures[1];
+    model.material.maps[MAP_SPECULAR].texture = textures[1];
 
     // Initialize values
     camera = (Camera2D){ (Vector2){ 0, 0 }, (Vector2){ screenSize.x/2, screenSize.y/2 }, 0.0f, 1.0f };
