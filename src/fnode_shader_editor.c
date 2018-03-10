@@ -973,8 +973,8 @@ void UpdateShaderData()
                 switch (loadedFiles)
                 {
                     case 0: model.material.maps[MAP_ALBEDO].texture = textures[loadedFiles]; break;
-                    case 1: model.material.maps[MAP_NORMAL].texture = textures[loadedFiles]; break;
-                    case 2: model.material.maps[MAP_SPECULAR].texture = textures[loadedFiles]; break;
+                    case 1: model.material.maps[MAP_SPECULAR].texture = textures[loadedFiles]; break;
+                    case 2: model.material.maps[MAP_NORMAL].texture = textures[loadedFiles]; break;
                     default: break;
                 }
             }
@@ -1962,7 +1962,7 @@ int main()
     textures[0] = LoadTexture(MODEL_TEXTURE_WINDAMOUNT);
     textures[1] = LoadTexture(MODEL_TEXTURE_DIFFUSE);
     model.material.maps[MAP_ALBEDO].texture = textures[0];
-    model.material.maps[MAP_NORMAL].texture = textures[1];
+    model.material.maps[MAP_SPECULAR].texture = textures[1];
 
     // Initialize values
     camera = (Camera2D){ (Vector2){ 0, 0 }, (Vector2){ screenSize.x/2, screenSize.y/2 }, 0.0f, 1.0f };

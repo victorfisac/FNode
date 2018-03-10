@@ -1,10 +1,25 @@
-1 ICON fnode.ico
-VALUE "Comments",         "comment\0"
-VALUE "CompanyName",      "Victor Fisac Fuentes\0"
-VALUE "FileDescription",  "Fnode 1.0 - Node based tool to create shaders\0"
-VALUE "FileVersion",      "1.0.0.0 TP\0"
-VALUE "InternalName",     "fnode\0"
-VALUE "LegalCopyright",   "Victor Fisac, 2016. All rights reserved.\0"
-VALUE "OriginalFilename", "fnode.exe\0"
-VALUE "ProductName",      "FNode\0"
-VALUE "ProductVersion",   "1.0.0.0 TP\0"
+GLFW_ICON ICON "fnode_glfw.ico"
+
+1 VERSIONINFO
+FILEVERSION     1,0,0,0
+PRODUCTVERSION  1,0,0,0
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904E4"
+    BEGIN
+      VALUE "CompanyName", "Victor Fisac Fuentes"
+      VALUE "FileDescription", "FNode - Visual scripting tool to build GLSL shaders"
+      VALUE "FileVersion", "1.0"
+      VALUE "InternalName", "fnode"
+      VALUE "LegalCopyright", "(c) 2017 Victor Fisac. All rights reserved."
+      VALUE "OriginalFilename", "fnode_shader_editor.exe"
+      VALUE "ProductName", "FNode app"
+      VALUE "ProductVersion", "1.0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1252	// English US
+  END
+END
