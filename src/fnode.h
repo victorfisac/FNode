@@ -2,10 +2,14 @@
 *
 *   FNode 1.0 - Node based shading library
 *
+*   DESCRIPTION:
+*
 *   FNode is a tool based in nodes to build GLSL shaders without any programming knowledge. You can
 *   create nodes and link themselves to operate with vectors and finally output them as the final vertex
 *   position or the final fragment color. It was developed in C programming language using OpenGL 
 *   as graphic card API and GLFW3 for windows and inputs management.
+*
+*   CONFIGURATION:
 *
 *   #define FNODE_IMPLEMENTATION
 *       Generates the implementation of the library into the included file.
@@ -21,9 +25,14 @@
 *       You can define your own malloc/free implementation replacing stdlib.h malloc()/free() functions.
 *       Otherwise it will include stdlib.h and use the C standard library malloc()/free() function.
 *
+*
+*   Use the following code to compile:
+*   gcc -o $(NAME_PART).exe $(FILE_NAME) -s icon\fnode -lraylib -lpthread -lopengl32 -lgdi32 -std=c99
+*
+*
 *   LICENSE: zlib/libpng
 *
-*   Copyright (c) 2016 Victor Fisac
+*   Copyright (c) 2016-2018 Victor Fisac
 *
 *   This software is provided "as-is", without any express or implied warranty. In no event
 *   will the authors be held liable for any damages arising from the use of this software.
@@ -149,13 +158,6 @@ typedef enum {
 //----------------------------------------------------------------------------------
 // Types and Structures Definition
 //----------------------------------------------------------------------------------
-typedef struct Vector4 {
-    float x;
-    float y;
-    float z;
-    float w;
-} Vector4;
-
 typedef struct FNodeValue {
     float value;                            // Output data value
     Rectangle shape;                        // Output data shape
