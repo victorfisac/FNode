@@ -32,29 +32,70 @@
 //----------------------------------------------------------------------------------
 // Defines and Macros
 //----------------------------------------------------------------------------------
-#define     UI_PADDING                  5                                   // Interface bounds padding with background
-#define     UI_PADDING_SCROLL           20                                  // Interface scroll bar padding
-#define     UI_BUTTON_HEIGHT            30                                  // Interface bounds height
-#define     UI_SCROLL                   20                                  // Interface scroll sensitivity
-#define     UI_GRID_ALPHA               0.25f                               // Interface canvas background grid lines alpha
-#define     VISOR_MODEL_SCALE           11.0f                               // Visor model scale
-#define     VISOR_MODEL_ROTATION        0.0f                                // Visor model rotation speed
-#define     VISOR_BORDER                2                                   // Visor window border width
-#define     VERTEX_PATH                 "output/shader.vs"                  // Vertex shader output path
-#define     FRAGMENT_PATH               "output/shader.fs"                  // Fragment shader output path
-#define     DATA_PATH                   "output/shader.fnode"               // Shader data output path
-#define     EXAMPLE_VERTEX_PATH         "example/shader.vs"                 // Vertex shader output path of start example
-#define     EXAMPLE_FRAGMENT_PATH       "example/shader.fs"                 // Fragment shader output path of start example
-#define     EXAMPLE_DATA_PATH           "example/shader.fnode"              // Shader data output path of start example
-#define     MAX_TEXTURES                30                                  // Shader maximum texture units
-#define     COMPILE_DURATION            120                                 // Shader compile result duration
-#define     MODEL_PATH                  "res/meshes/plant.obj"              // Example model file path
-#define     MODEL_TEXTURE_DIFFUSE       "res/textures/plant_color.png"      // Example model color texture file path
-#define     MODEL_TEXTURE_WINDAMOUNT    "res/textures/plant_motion.png"     // Example model motion texture file path
-#define     FXAA_VERTEX                 "res/shaders/fxaa.vs"               // Visor FXAA vertex shader path
-#define     FXAA_FRAGMENT               "res/shaders/fxaa.fs"               // Visor FXAA fragment shader path
-#define     FXAA_SCREENSIZE_UNIFORM     "viewportSize"                      // Visor FXAA shader screen size uniform location name
-#define     WINDOW_ICON                 "res/fnode_icon.png"                // FNode icon for window initialization
+#define     UI_PADDING                  25                                          // Interface bounds padding with background
+#define     UI_PADDING_SCROLL           0                                           // Interface scroll bar padding
+#define     UI_BUTTON_HEIGHT            30                                          // Interface bounds height
+#define     UI_SCROLL                   20                                          // Interface scroll sensitivity
+#define     UI_GRID_ALPHA               0.25f                                       // Interface canvas background grid lines alpha
+#define     VISOR_MODEL_SCALE           11.0f                                       // Visor model scale
+#define     VISOR_MODEL_ROTATION        0.0f                                        // Visor model rotation speed
+#define     VISOR_BORDER                2                                           // Visor window border width
+#define     VERTEX_PATH                 "output/shader.vs"                          // Vertex shader output path
+#define     FRAGMENT_PATH               "output/shader.fs"                          // Fragment shader output path
+#define     DATA_PATH                   "output/shader.fnode"                       // Shader data output path
+#define     EXAMPLE_VERTEX_PATH         "res/example/output/shader.vs"              // Vertex shader output path of start example
+#define     EXAMPLE_FRAGMENT_PATH       "res/example/output/shader.fs"              // Fragment shader output path of start example
+#define     EXAMPLE_DATA_PATH           "res/example/output/shader.fnode"           // Shader data output path of start example
+#define     MAX_TEXTURES                30                                          // Shader maximum texture units
+#define     COMPILE_DURATION            120                                         // Shader compile result duration
+#define     MODEL_PATH                  "res/example/meshes/plant.obj"              // Example model file path
+#define     MODEL_TEXTURE_DIFFUSE       "res/example/textures/plant_color.png"      // Example model color texture file path
+#define     MODEL_TEXTURE_WINDAMOUNT    "res/example/textures/plant_motion.png"     // Example model motion texture file path
+#define     FXAA_VERTEX                 "res/shaders/fxaa.vs"                       // Visor FXAA vertex shader path
+#define     FXAA_FRAGMENT               "res/shaders/fxaa.fs"                       // Visor FXAA fragment shader path
+#define     FXAA_SCREENSIZE_UNIFORM     "viewportSize"                              // Visor FXAA shader screen size uniform location name
+#define     WINDOW_ICON                 "res/fnode_icon.png"                        // FNode icon for window initialization
+
+// Interface visual style
+#define     COLOR_INTERFACE_SHAPE       (Color){ 245, 245, 245, 255 }
+#define     COLOR_INTERFACE_BORDER      (Color){ 132, 173, 183, 255 }
+#define     COLOR_BUTTON_SHAPE          (Color){ 200, 200, 200, 255 }
+#define     COLOR_BUTTON_BORDER         (Color){ 130, 130, 130, 255 }
+#define     COLOR_BUTTON_HIGHLIGHT      (Color){ 255, 255, 255, 40 }
+#define     COLOR_BUTTON_PRESSED        (Color){ 0, 0, 0, 40 }
+#define     COLOR_TOGGLE_ACTIVE         (Color){ 4, 140, 199, 255 }
+#define     COLOR_HELP_BACKGROUND       (Color){ 0, 0, 0, 145 }
+#define     COLOR_HELP_BORDER           (Color){ 255, 255, 255, 128 }
+#define     COLOR_HELP_TEXT             (Color){ 245, 245, 245, 255 }
+#define     COLOR_SECTION_TITLE         (Color){ 104, 104, 104, 255 }
+
+#define     PADDING_MAIN_LEFT           10
+#define     PADDING_MAIN_BOTTOM         20
+#define     PADDING_MAIN_TOP            20
+#define     PADDING_MAIN_CENTER         4
+
+#define     WIDTH_INTERFACE_BORDER      1
+#define     WIDTH_MAIN_BUTTON           100
+#define     WIDTH_HELP_LABEL            70
+
+#define     HEIGHT_MAIN_BUTTON          30
+
+//----------------------------------------------------------------------------------
+// Types and Structures Definition
+//----------------------------------------------------------------------------------
+typedef enum {
+    BUTTON_DEFAULT,
+    BUTTON_HOVER,
+    BUTTON_PRESSED,
+    BUTTON_CLICKED,
+    BUTTON_ACTIVE
+} ButtonState;
+
+typedef enum { 
+    TOGGLE_UNACTIVE,
+    TOGGLE_PRESSED,
+    TOGGLE_ACTIVE 
+} ToggleState;
 
 //----------------------------------------------------------------------------------
 // Global Variables
@@ -112,6 +153,7 @@ void UpdateCommentCreationEdit();                           // Check comment cre
 void UpdateCommentsDrag();                                  // Check comment drag input
 void UpdateCommentsEdit();                                  // Check comment text edit input
 void UpdateShaderData();                                    // Update required values to created shader for geometry data calculations
+void SaveChanges();                                         // Serialize current project data and write to file
 void CompileShader();                                       // Compiles all node structure to create the GLSL fragment shader in output folder
 void CheckConstant(FNode node, FILE *file);                 // Check nodes searching for constant values to define them in shaders
 void CompileNode(FNode node, FILE *file, bool fragment);    // Compiles a specific node checking its inputs and writing current node operation in shader
@@ -122,6 +164,9 @@ void DrawCanvas();                                          // Draw canvas space
 void DrawCanvasGrid(int divisions);                         // Draw canvas grid with a specific number of divisions for horizontal and vertical lines
 void DrawVisor();                                           // Draws a visor with default model rotating and current shader
 void DrawInterface();                                       // Draw interface to create nodes
+bool InterfaceButtonGroup(Rectangle bounds, const char *text, bool enabled);    // Button group element, returns true when pressed
+bool InterfaceButton(Rectangle bounds, const char *text);   // Button element, returns true when pressed
+bool InterfaceToggle(Rectangle bounds, bool toggle);        // Toggle Button element, returns true when active
 char *GetFileExtension(char *filename);                     // Returns the extension of a file
 bool CheckFileExtension(char *filename, char *extension);   // Check filename for specific extension
 bool CheckTextureExtension(char *filename);                 // Check filename for compatible texture extensions
@@ -1164,22 +1209,97 @@ void UpdateShaderData()
     }
 }
 
+// Serialize current project data and write to file
+void SaveChanges()
+{
+    // Delete current serialized data file if exists
+    FILE *previousFile = fopen(DATA_PATH, "r");
+    if (previousFile != NULL)
+    {
+        fclose(previousFile);
+        remove(DATA_PATH);
+    }
+
+    // Open shader serialized data file
+    FILE *dataFile = fopen(DATA_PATH, "w");
+    if (dataFile != NULL)
+    {
+        // Nodes data reading
+        int count = 0;
+        for (int i = 0; i < MAX_NODES; i++)
+        {
+            for (int k = 0; k < nodesCount; k++)
+            {
+                if (nodes[k]->id == i)
+                {
+                    float type = (float)nodes[k]->type;
+                    float property = (float)nodes[k]->property;
+                    float inputs[MAX_INPUTS] = { (float)nodes[k]->inputs[0], (float)nodes[k]->inputs[1], (float)nodes[k]->inputs[2], (float)nodes[k]->inputs[3] };
+                    float inputsCount = (float)nodes[k]->inputsCount;
+                    float inputsLimit = (float)nodes[k]->inputsLimit;
+                    float dataCount = (float)nodes[k]->output.dataCount;
+                    float data[MAX_VALUES] = { nodes[k]->output.data[0].value, nodes[k]->output.data[1].value, nodes[k]->output.data[2].value, nodes[k]->output.data[3].value, nodes[k]->output.data[4].value,
+                    nodes[k]->output.data[5].value, nodes[k]->output.data[6].value, nodes[k]->output.data[7].value, nodes[k]->output.data[8].value, nodes[k]->output.data[9].value, nodes[k]->output.data[10].value,
+                    nodes[k]->output.data[11].value, nodes[k]->output.data[12].value, nodes[k]->output.data[13].value, nodes[k]->output.data[14].value, nodes[k]->output.data[15].value };
+                    float shapeX = (float)nodes[k]->shape.x;
+                    float shapeY = (float)nodes[k]->shape.y;
+
+                    fprintf(dataFile, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,\n", type, property,
+                    inputs[0], inputs[1], inputs[2], inputs[3], inputsCount, inputsLimit, dataCount, data[0], data[1], data[2],
+                    data[3], data[4], data[5], data[6], data[7], data[8], data[9], data[10], data[11], data[12], data[13], data[14],
+                    data[15], shapeX, shapeY);
+                    
+                    count++;
+                    break;
+                }
+            }
+
+            if (count == nodesCount) break;
+        }
+
+        // Lines data reading
+        count = 0;
+
+        for (int i = 0; i < MAX_NODES; i++)
+        {
+            for (int k = 0; k < nodesCount; k++)
+            {
+                if (lines[k]->id == i)
+                {
+                    fprintf(dataFile, "?%i?%i\n", lines[k]->from, lines[k]->to);
+                    
+                    count++;
+                    break;
+                }
+            }
+
+            if (count == linesCount) break;
+        }
+
+        fclose(dataFile);
+    }
+}
+
 // Compiles all node structure to create the GLSL fragment shader in output folder
 void CompileShader()
 {
+    SaveChanges();
+
     // Reset previous compiled shader data
     if (loadedShader || (shader.id > 0)) UnloadShader(shader);
-    remove(DATA_PATH);
+
     remove(VERTEX_PATH);
     remove(FRAGMENT_PATH);
+
     model.material.shader = GetShaderDefault();
     for (int i = 0; i < MAX_TEXTURES; i++) usedUnits[i] = false;
-    compileState = -1;
-    compileFrame = 0;
     viewUniform = -1;
     transformUniform = -1;
     timeUniformV = -1;
     timeUniformF = -1;
+
+    compileState = -1;
+    compileFrame = 0;
 
     // Open shader data file
     FILE *dataFile = fopen(DATA_PATH, "w");
@@ -1912,154 +2032,328 @@ void DrawInterface()
 {
     if (help)
     {
-        DrawRectangle(5, 5, 450, 200, (Color){ 150, 150, 150, 150 });
-        DrawRectangleLines(5, 5, 450, 200, BLACK);
+        int leftPadding = screenSize.x - canvasSize.x;
+        DrawRectangle(leftPadding + PADDING_MAIN_LEFT, PADDING_MAIN_BOTTOM, 450, 200, COLOR_HELP_BACKGROUND);
+        DrawRectangleLines(leftPadding + PADDING_MAIN_LEFT, PADDING_MAIN_BOTTOM, 450, 200, COLOR_HELP_BORDER);
         
-        DrawText("Welcome to FNode, adventurer!", 15, 15, 10, BLACK);
-        DrawText("Controls:", 15, 35, 10, BLACK);
-        DrawText("- Drag Canvas/Node: LEFT MOUSE BUTTON", 35, 55, 10, BLACK);
-        DrawText("- Drag Comment: LEFT ALT + LEFT MOUSE BUTTON (DRAG IN COMMENT)", 35, 75, 10, BLACK);
-        DrawText("- Create Comment: LEFT ALT + LEFT MOUSE BUTTON (DRAG IN CANVAS)", 35, 95, 10, BLACK);
-        DrawText("- Delete Node/Line/Comment: RIGHT MOUSE BUTTON", 35, 115, 10, BLACK);
-        DrawText("- Link: LEFT MOUSE BUTTON (INPUT/OUTPUT RECTANGLES)", 35, 135, 10, BLACK);
-        DrawText("- Preview: RIGHT ALT BUTTON", 35, 155, 10, BLACK);
-        DrawText("Credits: Victor Fisac [www.victorfisac.com]", 15, 180, 10, BLACK);
+        DrawText("Welcome to FNode, adventurer!", leftPadding + PADDING_MAIN_LEFT + 15, PADDING_MAIN_BOTTOM + 15, 10, COLOR_HELP_TEXT);
+        DrawText("Controls:", leftPadding + PADDING_MAIN_LEFT + 15, PADDING_MAIN_BOTTOM + 35, 10, COLOR_HELP_TEXT);
+        DrawText("- Drag Canvas/Node: LEFT MOUSE BUTTON", leftPadding + PADDING_MAIN_LEFT + 35, PADDING_MAIN_BOTTOM + 55, 10, COLOR_HELP_TEXT);
+        DrawText("- Drag Comment: LEFT ALT + LEFT MOUSE BUTTON (DRAG IN COMMENT)", leftPadding + PADDING_MAIN_LEFT + 35, PADDING_MAIN_BOTTOM + 75, 10, COLOR_HELP_TEXT);
+        DrawText("- Create Comment: LEFT ALT + LEFT MOUSE BUTTON (DRAG IN CANVAS)", leftPadding + PADDING_MAIN_LEFT + 35, PADDING_MAIN_BOTTOM + 95, 10, COLOR_HELP_TEXT);
+        DrawText("- Delete Node/Line/Comment: RIGHT MOUSE BUTTON", leftPadding + PADDING_MAIN_LEFT + 35, PADDING_MAIN_BOTTOM + 115, 10, COLOR_HELP_TEXT);
+        DrawText("- Link: LEFT MOUSE BUTTON (INPUT/OUTPUT RECTANGLES)", leftPadding + PADDING_MAIN_LEFT + 35, PADDING_MAIN_BOTTOM + 135, 10, COLOR_HELP_TEXT);
+        DrawText("- Preview: RIGHT ALT BUTTON", PADDING_MAIN_LEFT + 35, leftPadding + PADDING_MAIN_BOTTOM + 155, 10, COLOR_HELP_TEXT);
+        DrawText("Credits: Victor Fisac [www.victorfisac.com]", leftPadding + PADDING_MAIN_LEFT + 15, PADDING_MAIN_BOTTOM + 180, 10, COLOR_HELP_TEXT);
         
-        Rectangle iconRect = (Rectangle){ 450 - iconTex.width/4, 200 - iconTex.height/4, iconTex.width/4, iconTex.height/4 };
+        Rectangle iconRect = (Rectangle){ leftPadding + PADDING_MAIN_LEFT + 440 - iconTex.width, PADDING_MAIN_BOTTOM + 190 - iconTex.height, iconTex.width, iconTex.height };
         DrawTexturePro(iconTex, (Rectangle){ 0, 0, iconTex.width, iconTex.height }, iconRect, (Vector2){ 0.0f, 0.0f }, 0.0f, WHITE);
     }
-    else DrawText("Press 'H' to display HELP menu", 10, 10, 10, BLACK);
+    else
+    {
+        int leftPadding = screenSize.x - canvasSize.x;
+        DrawRectangle(leftPadding + PADDING_MAIN_LEFT, PADDING_MAIN_BOTTOM, WIDTH_HELP_LABEL, UI_BUTTON_HEIGHT, COLOR_HELP_BACKGROUND);
+        DrawRectangleLines(leftPadding + PADDING_MAIN_LEFT, PADDING_MAIN_BOTTOM, WIDTH_HELP_LABEL, UI_BUTTON_HEIGHT, COLOR_HELP_BORDER);
+
+        DrawText("H - Help", leftPadding + PADDING_MAIN_LEFT + (WIDTH_HELP_LABEL - MeasureText("H - Help", 10))/2, (PADDING_MAIN_BOTTOM + UI_BUTTON_HEIGHT)/2 + 5, 10, COLOR_HELP_TEXT);
+    }
+
+    Rectangle sidebarRect = { 0, 0, screenSize.x - canvasSize.x, screenSize.y };
+    DrawRectangleRec(sidebarRect, COLOR_INTERFACE_SHAPE);
+    DrawRectangle(screenSize.x - canvasSize.x, 0, WIDTH_INTERFACE_BORDER, sidebarRect.height, COLOR_INTERFACE_BORDER);
+
+    Rectangle nodesRect = { sidebarRect.x + PADDING_MAIN_LEFT, PADDING_MAIN_TOP*0.75f, sidebarRect.width - PADDING_MAIN_LEFT*2, UI_BUTTON_HEIGHT*3 + PADDING_MAIN_BOTTOM*1.45f };
+    DrawRectangle(nodesRect.x - WIDTH_INTERFACE_BORDER, nodesRect.y - WIDTH_INTERFACE_BORDER, nodesRect.width + WIDTH_INTERFACE_BORDER*2, nodesRect.height + WIDTH_INTERFACE_BORDER*2, COLOR_INTERFACE_BORDER);
+    DrawRectangleRec(nodesRect, COLOR_INTERFACE_SHAPE);
+    DrawRectangle(nodesRect.x + PADDING_MAIN_LEFT, nodesRect.y - 5, MeasureText("Tools", 10) + PADDING_MAIN_LEFT, 10, COLOR_INTERFACE_SHAPE);
+    DrawText("Tools", nodesRect.x + PADDING_MAIN_LEFT*1.5f, nodesRect.y - 5, 10, COLOR_SECTION_TITLE);
+
+    nodesRect.x += PADDING_MAIN_LEFT/2;
+    nodesRect.y += PADDING_MAIN_TOP*0.75f;
+    nodesRect.width -= PADDING_MAIN_LEFT;
+    menuOffset = 0;
     
-    // Draw interface background
-    DrawRectangleRec((Rectangle){ canvasSize.x, 0.0f, screenSize.x - canvasSize.x, screenSize.y }, DARKGRAY);
+    if (InterfaceButton((Rectangle){ nodesRect.x, nodesRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER)*menuOffset, nodesRect.width, UI_BUTTON_HEIGHT }, "Align Nodes")) AlignAllNodes();
+    if (InterfaceButton((Rectangle){ nodesRect.x, nodesRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER)*menuOffset, nodesRect.width, UI_BUTTON_HEIGHT }, "Clear Graph")) ClearGraph();
+    if (InterfaceButton((Rectangle){ nodesRect.x, nodesRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER)*menuOffset, nodesRect.width, UI_BUTTON_HEIGHT }, "Clear Unused")) ClearUnusedNodes();
+    
+    nodesRect = (Rectangle){ sidebarRect.x + PADDING_MAIN_LEFT, UI_BUTTON_HEIGHT*4 + PADDING_MAIN_TOP*2, sidebarRect.width - PADDING_MAIN_LEFT*2, UI_BUTTON_HEIGHT*2 + PADDING_MAIN_BOTTOM*1.25f };
+    DrawRectangle(nodesRect.x - WIDTH_INTERFACE_BORDER, nodesRect.y - WIDTH_INTERFACE_BORDER, nodesRect.width + WIDTH_INTERFACE_BORDER*2, nodesRect.height + WIDTH_INTERFACE_BORDER*2, COLOR_INTERFACE_BORDER);
+    DrawRectangleRec(nodesRect, COLOR_INTERFACE_SHAPE);
+    DrawRectangle(nodesRect.x + PADDING_MAIN_LEFT, nodesRect.y - 5, MeasureText("Compilation", 10) + PADDING_MAIN_LEFT, 10, COLOR_INTERFACE_SHAPE);
+    DrawText("Compilation", nodesRect.x + PADDING_MAIN_LEFT*1.5f, nodesRect.y - 5, 10, COLOR_SECTION_TITLE);
 
     // Draw interface main buttons
-    if (FButton((Rectangle){ UI_PADDING, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Compile")) CompileShader(); menuOffset = 1;
-    if (FButton((Rectangle){ UI_PADDING + ((screenSize.x - canvasSize.x - UI_PADDING*2)/2 + UI_PADDING)*menuOffset, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Clear Graph")) ClearGraph();
-    if (FButton((Rectangle){ UI_PADDING + ((screenSize.x - canvasSize.x - UI_PADDING*2)/2 + UI_PADDING)*menuOffset, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Align Nodes")) AlignAllNodes();
-    if (FButton((Rectangle){ UI_PADDING + ((screenSize.x - canvasSize.x - UI_PADDING*2)/2 + UI_PADDING)*menuOffset, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Clear Unused")) ClearUnusedNodes();
-    if (FButton((Rectangle){ UI_PADDING + ((screenSize.x - canvasSize.x - UI_PADDING*2)/2 + UI_PADDING)*menuOffset, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT }, "Settings"))
+    nodesRect.x += PADDING_MAIN_LEFT/2;
+    nodesRect.y += PADDING_MAIN_TOP*0.75f;
+    nodesRect.width -= PADDING_MAIN_LEFT;
+    menuOffset = 0;
+
+    if (InterfaceButton((Rectangle){ nodesRect.x, nodesRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER)*menuOffset, nodesRect.width, UI_BUTTON_HEIGHT }, "Compile")) CompileShader();
+    if (InterfaceButton((Rectangle){ nodesRect.x, nodesRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER)*menuOffset, nodesRect.width, UI_BUTTON_HEIGHT }, "Save Changes")) SaveChanges();
+
+    nodesRect = (Rectangle){ sidebarRect.x + PADDING_MAIN_LEFT, UI_BUTTON_HEIGHT*8 + PADDING_MAIN_TOP*1.5f, sidebarRect.width - PADDING_MAIN_LEFT*2, UI_BUTTON_HEIGHT*2 + PADDING_MAIN_TOP*0.5f };
+    DrawRectangle(nodesRect.x - WIDTH_INTERFACE_BORDER, nodesRect.y - WIDTH_INTERFACE_BORDER, nodesRect.width + WIDTH_INTERFACE_BORDER*2, nodesRect.height + WIDTH_INTERFACE_BORDER*2, COLOR_INTERFACE_BORDER);
+    DrawRectangleRec(nodesRect, COLOR_INTERFACE_SHAPE);
+    DrawRectangle(nodesRect.x + PADDING_MAIN_LEFT, nodesRect.y - 5, MeasureText("Configuration", 10) + PADDING_MAIN_LEFT, 10, COLOR_INTERFACE_SHAPE);
+    DrawText("Configuration", nodesRect.x + PADDING_MAIN_LEFT*1.5f, nodesRect.y - 5, 10, COLOR_SECTION_TITLE);
+
+    nodesRect.x += PADDING_MAIN_LEFT/2;
+    nodesRect.y += PADDING_MAIN_TOP*0.75f;
+    nodesRect.width -= PADDING_MAIN_LEFT;
+    menuOffset = 0;
+    
+    if (InterfaceButtonGroup((Rectangle){ nodesRect.x, nodesRect.y, nodesRect.width/2 - PADDING_MAIN_CENTER, UI_BUTTON_HEIGHT*0.75f }, "GLSL 330", (version == 0))) version = 0;
+    if (InterfaceButtonGroup((Rectangle){ nodesRect.x + (nodesRect.width/2*menuOffset), nodesRect.y, nodesRect.width/2 - PADDING_MAIN_CENTER, UI_BUTTON_HEIGHT*0.75f }, "GLSL 110", (version == 1))) version = 1;
+    backfaceCulling = InterfaceToggle((Rectangle){ nodesRect.x, nodesRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER), 16, 16 }, backfaceCulling);
+    DrawText("Backface Culling", nodesRect.x + PADDING_MAIN_LEFT*3, nodesRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER) + 3, 10, COLOR_SECTION_TITLE);
+
+    nodesRect = (Rectangle){ sidebarRect.x + PADDING_MAIN_LEFT, UI_BUTTON_HEIGHT*12 + PADDING_MAIN_TOP*0.25f, sidebarRect.width - PADDING_MAIN_LEFT*2, UI_BUTTON_HEIGHT*11 + PADDING_MAIN_TOP*1.3f };
+    DrawRectangle(nodesRect.x - WIDTH_INTERFACE_BORDER, nodesRect.y - WIDTH_INTERFACE_BORDER, nodesRect.width + WIDTH_INTERFACE_BORDER*2, nodesRect.height + WIDTH_INTERFACE_BORDER*2, COLOR_INTERFACE_BORDER);
+    DrawRectangleRec(nodesRect, COLOR_INTERFACE_SHAPE);
+    DrawRectangle(nodesRect.x + PADDING_MAIN_LEFT, nodesRect.y - 5, MeasureText("Textures", 10) + PADDING_MAIN_LEFT, 10, COLOR_INTERFACE_SHAPE);
+    DrawText("Textures", nodesRect.x + PADDING_MAIN_LEFT*1.5f, nodesRect.y - 5, 10, COLOR_SECTION_TITLE);
+
+    nodesRect.x += PADDING_MAIN_LEFT/2;
+    nodesRect.y += PADDING_MAIN_TOP*0.75f;
+    nodesRect.width -= PADDING_MAIN_LEFT;
+    menuOffset = 0;
+    int menuOffsetY = 0;
+
+    if (InterfaceButton((Rectangle){ nodesRect.x, nodesRect.y, nodesRect.width/2 - PADDING_MAIN_CENTER/2, nodesRect.width/2 }, "Unit 0"))
     {
-        settings = true;
-        interact = false;
+        // TODO: assign texture unit 0
     }
+    if (InterfaceButton((Rectangle){ nodesRect.x + (nodesRect.width/2 + PADDING_MAIN_CENTER/2)*menuOffset, nodesRect.y, nodesRect.width/2 - PADDING_MAIN_CENTER/2, nodesRect.width/2 }, "Unit 1"))
+    {
+        // TODO: assign texture unit 1
+    }
+
+    menuOffsetY++;
+    menuOffset = 0;
+    if (InterfaceButton((Rectangle){ nodesRect.x, nodesRect.y + (nodesRect.width/2 + PADDING_MAIN_CENTER)*menuOffsetY, nodesRect.width/2 - PADDING_MAIN_CENTER/2, nodesRect.width/2 }, "Unit 2"))
+    {
+        // TODO: assign texture unit 2
+    }
+    if (InterfaceButton((Rectangle){ nodesRect.x + (nodesRect.width + PADDING_MAIN_CENTER)/2*menuOffset, nodesRect.y + (nodesRect.width/2 + PADDING_MAIN_CENTER)*menuOffsetY, nodesRect.width/2 - PADDING_MAIN_CENTER/2, nodesRect.width/2 }, "Unit 3"))
+    {
+        // TODO: assign texture unit 3
+    }
+    
+    menuOffsetY++;
+    menuOffset = 0;
+    if (InterfaceButton((Rectangle){ nodesRect.x, nodesRect.y + (nodesRect.width/2 + PADDING_MAIN_CENTER)*menuOffsetY, nodesRect.width/2 - PADDING_MAIN_CENTER/2, nodesRect.width/2 }, "Unit 4"))
+    {
+        // TODO: assign texture unit 4
+    }
+    if (InterfaceButton((Rectangle){ nodesRect.x + (nodesRect.width + PADDING_MAIN_CENTER)/2*menuOffset, nodesRect.y + (nodesRect.width/2 + PADDING_MAIN_CENTER)*menuOffsetY, nodesRect.width/2 - PADDING_MAIN_CENTER/2, nodesRect.width/2 }, "Unit 5"))
+    {
+        // TODO: assign texture unit 5
+    }
+
+    menuOffsetY++;
+    menuOffset = 0;
+    if (InterfaceButton((Rectangle){ nodesRect.x, nodesRect.y + (nodesRect.width/2 + PADDING_MAIN_CENTER)*menuOffsetY, nodesRect.width/2 - PADDING_MAIN_CENTER/2, nodesRect.width/2 }, "Unit 6"))
+    {
+        // TODO: assign texture unit 6
+    }
+    if (InterfaceButton((Rectangle){ nodesRect.x + (nodesRect.width + PADDING_MAIN_CENTER)/2*menuOffset, nodesRect.y + (nodesRect.width/2 + PADDING_MAIN_CENTER)*menuOffsetY, nodesRect.width/2 - PADDING_MAIN_CENTER/2, nodesRect.width/2 }, "Unit 7"))
+    {
+        // TODO: assign texture unit 7
+    }
+
+    nodesRect = (Rectangle){ sidebarRect.x + PADDING_MAIN_LEFT, UI_BUTTON_HEIGHT*24 + PADDING_MAIN_TOP*1.4f, sidebarRect.width - PADDING_MAIN_LEFT*2, UI_BUTTON_HEIGHT + PADDING_MAIN_TOP*0.25f };
+    DrawRectangle(nodesRect.x - WIDTH_INTERFACE_BORDER, nodesRect.y - WIDTH_INTERFACE_BORDER, nodesRect.width + WIDTH_INTERFACE_BORDER*2, nodesRect.height + WIDTH_INTERFACE_BORDER*2, COLOR_INTERFACE_BORDER);
+    DrawRectangleRec(nodesRect, COLOR_INTERFACE_SHAPE);
+    DrawRectangle(nodesRect.x + PADDING_MAIN_LEFT, nodesRect.y - 5, MeasureText("Credits", 10) + PADDING_MAIN_LEFT, 10, COLOR_INTERFACE_SHAPE);
+    DrawText("Credits", nodesRect.x + PADDING_MAIN_LEFT*1.5f, nodesRect.y - 5, 10, COLOR_SECTION_TITLE);
+
+    nodesRect.x += PADDING_MAIN_LEFT*1.1f;
+    nodesRect.y += PADDING_MAIN_TOP*0.5f;
+    nodesRect.width -= PADDING_MAIN_LEFT;
+    DrawText("Victor Fisac [victorfisac.com]", nodesRect.x, nodesRect.y + 5, 10, COLOR_SECTION_TITLE);
+
+    // Draw interface background
+    Rectangle interfaceRect = { canvasSize.x, 0.0f, screenSize.x - canvasSize.x, screenSize.y };
+    DrawRectangleRec(interfaceRect, COLOR_INTERFACE_SHAPE);
+    DrawRectangle(interfaceRect.x - WIDTH_INTERFACE_BORDER*2, interfaceRect.y, WIDTH_INTERFACE_BORDER, interfaceRect.height, COLOR_INTERFACE_BORDER);
 
     // Draw interface nodes buttons
     DrawText("Constant Vectors", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Constant Vectors", 10))/2 - UI_PADDING_SCROLL/2, UI_PADDING*4 - menuScroll, 10, WHITE); menuOffset = 1;
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Value")) CreateNodeValue((float)GetRandomValue(-11, 10));
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vector 2")) CreateNodeVector2((Vector2){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vector 3")) CreateNodeVector3((Vector3){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vector 4")) CreateNodeVector4((Vector4){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Matrix 4x4")) CreateNodeMatrix(FMatrixIdentity());
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Value")) CreateNodeValue((float)GetRandomValue(-11, 10));
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vector 2")) CreateNodeVector2((Vector2){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vector 3")) CreateNodeVector3((Vector3){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vector 4")) CreateNodeVector4((Vector4){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Matrix 4x4")) CreateNodeMatrix(FMatrixIdentity());
 
     DrawText("Properties", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Properties", 10))/2 - UI_PADDING_SCROLL/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, 10, WHITE); menuOffset++;
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Value")) CreateNodeProperty(FNODE_VALUE, "Value", 1, 0);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Color")) CreateNodeProperty(FNODE_VECTOR4, "Color", 4, 0);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Sampler 2D")) CreateNodeProperty(FNODE_SAMPLER2D, "Sampler 2D", 4, 2);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Value")) CreateNodeProperty(FNODE_VALUE, "Value", 1, 0);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Color")) CreateNodeProperty(FNODE_VECTOR4, "Color", 4, 0);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Sampler 2D")) CreateNodeProperty(FNODE_SAMPLER2D, "Sampler 2D", 4, 2);
     
     DrawText("Arithmetic", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Arithmetic", 10))/2 - UI_PADDING_SCROLL/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, 10, WHITE); menuOffset++;
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Add")) CreateNodeOperator(FNODE_ADD, "Add", MAX_INPUTS);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Subtract")) CreateNodeOperator(FNODE_SUBTRACT, "Subtract", MAX_INPUTS);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Multiply")) CreateNodeOperator(FNODE_MULTIPLY, "Multiply", MAX_INPUTS);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Multiply Matrix")) CreateNodeOperator(FNODE_MULTIPLYMATRIX, "Multiply Matrix", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Divide")) CreateNodeOperator(FNODE_DIVIDE, "Divide", MAX_INPUTS);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "One Minus")) CreateNodeOperator(FNODE_ONEMINUS, "One Minus", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Abs")) CreateNodeOperator(FNODE_ABS, "Abs", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Clamp 0-1")) CreateNodeOperator(FNODE_CLAMP01, "Clamp 0-1", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Max")) CreateNodeOperator(FNODE_MAX, "Max", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Min")) CreateNodeOperator(FNODE_MIN, "Min", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Negate")) CreateNodeOperator(FNODE_NEGATE, "Negate", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Reciprocal")) CreateNodeOperator(FNODE_RECIPROCAL, "Reciprocal", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Square Root")) CreateNodeOperator(FNODE_SQRT, "Square Root", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Power")) CreateNodeOperator(FNODE_POWER, "Power", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Exp 2")) CreateNodeOperator(FNODE_EXP2, "Exp 2", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Posterize")) CreateNodeOperator(FNODE_POSTERIZE, "Posterize", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Ceil")) CreateNodeOperator(FNODE_CEIL, "Ceil", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Round")) CreateNodeOperator(FNODE_ROUND, "Round", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Trunc")) CreateNodeOperator(FNODE_TRUNC, "Trunc", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Lerp")) CreateNodeOperator(FNODE_LERP, "Lerp", 3);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Step")) CreateNodeOperator(FNODE_STEP, "Step", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "SmoothStep")) CreateNodeOperator(FNODE_SMOOTHSTEP, "SmoothStep", 3);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Add")) CreateNodeOperator(FNODE_ADD, "Add", MAX_INPUTS);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Subtract")) CreateNodeOperator(FNODE_SUBTRACT, "Subtract", MAX_INPUTS);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Multiply")) CreateNodeOperator(FNODE_MULTIPLY, "Multiply", MAX_INPUTS);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Multiply Matrix")) CreateNodeOperator(FNODE_MULTIPLYMATRIX, "Multiply Matrix", 2);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Divide")) CreateNodeOperator(FNODE_DIVIDE, "Divide", MAX_INPUTS);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "One Minus")) CreateNodeOperator(FNODE_ONEMINUS, "One Minus", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Abs")) CreateNodeOperator(FNODE_ABS, "Abs", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Clamp 0-1")) CreateNodeOperator(FNODE_CLAMP01, "Clamp 0-1", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Max")) CreateNodeOperator(FNODE_MAX, "Max", 2);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Min")) CreateNodeOperator(FNODE_MIN, "Min", 2);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Negate")) CreateNodeOperator(FNODE_NEGATE, "Negate", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Reciprocal")) CreateNodeOperator(FNODE_RECIPROCAL, "Reciprocal", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Square Root")) CreateNodeOperator(FNODE_SQRT, "Square Root", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Power")) CreateNodeOperator(FNODE_POWER, "Power", 2);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Exp 2")) CreateNodeOperator(FNODE_EXP2, "Exp 2", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Posterize")) CreateNodeOperator(FNODE_POSTERIZE, "Posterize", 2);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Ceil")) CreateNodeOperator(FNODE_CEIL, "Ceil", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Round")) CreateNodeOperator(FNODE_ROUND, "Round", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Trunc")) CreateNodeOperator(FNODE_TRUNC, "Trunc", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Lerp")) CreateNodeOperator(FNODE_LERP, "Lerp", 3);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Step")) CreateNodeOperator(FNODE_STEP, "Step", 2);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "SmoothStep")) CreateNodeOperator(FNODE_SMOOTHSTEP, "SmoothStep", 3);
 
     DrawText("Vector Operations", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Vector Operations", 10))/2 - UI_PADDING_SCROLL/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, 10, WHITE); menuOffset++;
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Append")) CreateNodeOperator(FNODE_APPEND, "Append", 4);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Normalize")) CreateNodeOperator(FNODE_NORMALIZE, "Normalize", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Cross Product")) CreateNodeOperator(FNODE_CROSSPRODUCT, "Cross Product", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Desaturate")) CreateNodeOperator(FNODE_DESATURATE, "Desaturate", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Distance")) CreateNodeOperator(FNODE_DISTANCE, "Distance", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Dot Product")) CreateNodeOperator(FNODE_DOTPRODUCT, "Dot Product", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Length")) CreateNodeOperator(FNODE_LENGTH, "Length", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Transpose")) CreateNodeOperator(FNODE_TRANSPOSE, "Transpose", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vector Projection")) CreateNodeOperator(FNODE_PROJECTION, "Vector Projection", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vector Rejection")) CreateNodeOperator(FNODE_REJECTION, "Vector Rejection", 2);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Half Direction")) CreateNodeOperator(FNODE_HALFDIRECTION, "Half Direction", 2);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Append")) CreateNodeOperator(FNODE_APPEND, "Append", 4);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Normalize")) CreateNodeOperator(FNODE_NORMALIZE, "Normalize", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Cross Product")) CreateNodeOperator(FNODE_CROSSPRODUCT, "Cross Product", 2);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Desaturate")) CreateNodeOperator(FNODE_DESATURATE, "Desaturate", 2);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Distance")) CreateNodeOperator(FNODE_DISTANCE, "Distance", 2);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Dot Product")) CreateNodeOperator(FNODE_DOTPRODUCT, "Dot Product", 2);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Length")) CreateNodeOperator(FNODE_LENGTH, "Length", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Transpose")) CreateNodeOperator(FNODE_TRANSPOSE, "Transpose", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vector Projection")) CreateNodeOperator(FNODE_PROJECTION, "Vector Projection", 2);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vector Rejection")) CreateNodeOperator(FNODE_REJECTION, "Vector Rejection", 2);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Half Direction")) CreateNodeOperator(FNODE_HALFDIRECTION, "Half Direction", 2);
 
     DrawText("Geometry Data", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Geometry Data", 10))/2 - UI_PADDING_SCROLL/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, 10, WHITE); menuOffset++;
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vertex Position")) CreateNodeUniform(FNODE_VERTEXPOSITION, "Vertex Position", 3);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Normal Direction")) CreateNodeUniform(FNODE_VERTEXNORMAL, "Normal Direction", 3);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vertex Color")) CreateNodeOperator(FNODE_VERTEXCOLOR, "Vertex Color", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "View Direction")) CreateNodeUniform(FNODE_VIEWDIRECTION, "View Direction", 3);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Fresnel")) CreateNodeUniform(FNODE_FRESNEL, "Fresnel", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "MVP Matrix")) CreateNodeUniform(FNODE_MVP, "MVP Matrix", 16);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vertex Position")) CreateNodeUniform(FNODE_VERTEXPOSITION, "Vertex Position", 3);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Normal Direction")) CreateNodeUniform(FNODE_VERTEXNORMAL, "Normal Direction", 3);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Vertex Color")) CreateNodeOperator(FNODE_VERTEXCOLOR, "Vertex Color", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "View Direction")) CreateNodeUniform(FNODE_VIEWDIRECTION, "View Direction", 3);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Fresnel")) CreateNodeUniform(FNODE_FRESNEL, "Fresnel", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "MVP Matrix")) CreateNodeUniform(FNODE_MVP, "MVP Matrix", 16);
 
     DrawText("Math Constants", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Math Constants", 10))/2 - UI_PADDING_SCROLL/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, 10, WHITE); menuOffset++;
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "PI")) CreateNodePI();
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "e")) CreateNodeE();
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "PI")) CreateNodePI();
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "e")) CreateNodeE();
 
     DrawText("Trigonometry", canvasSize.x + ((screenSize.x - canvasSize.x) - MeasureText("Trigonometry", 10))/2 - UI_PADDING_SCROLL/2, UI_PADDING*4 + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, 10, WHITE); menuOffset++;
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Current Time")) CreateNodeUniform(FNODE_TIME, "Current Time", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Cosine")) CreateNodeOperator(FNODE_COS, "Cosine", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Sine")) CreateNodeOperator(FNODE_SIN, "Sine", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Tangent")) CreateNodeOperator(FNODE_TAN, "Tangent", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Deg to Rad")) CreateNodeOperator(FNODE_DEG2RAD, "Deg to Rad", 1);
-    if (FButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Rad to Deg")) CreateNodeOperator(FNODE_RAD2DEG, "Rad to Deg", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Current Time")) CreateNodeUniform(FNODE_TIME, "Current Time", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Cosine")) CreateNodeOperator(FNODE_COS, "Cosine", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Sine")) CreateNodeOperator(FNODE_SIN, "Sine", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Tangent")) CreateNodeOperator(FNODE_TAN, "Tangent", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Deg to Rad")) CreateNodeOperator(FNODE_DEG2RAD, "Deg to Rad", 1);
+    if (InterfaceButton((Rectangle){ canvasSize.x + UI_PADDING, UI_PADDING + (UI_BUTTON_HEIGHT + UI_PADDING)*menuOffset - menuScroll, screenSize.x - canvasSize.x - UI_PADDING*2 - UI_PADDING_SCROLL, UI_BUTTON_HEIGHT }, "Rad to Deg")) CreateNodeOperator(FNODE_RAD2DEG, "Rad to Deg", 1);
 
     DrawRectangle(menuScrollRec.x - 3, 2, menuScrollRec.width + 6, screenSize.y - 4, (Color){ UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, 255 });
     DrawRectangle(menuScrollRec.x - 2, menuScrollRec.y - 2, menuScrollRec.width + 4, menuScrollRec.height + 4, DARKGRAY);
     DrawRectangleRec(menuScrollRec, ((scrollState == 1) ? LIGHTGRAY : RAYWHITE));
-
-    if (settings)
-    {
-        DrawRectangle(0, 0, screenSize.x, screenSize.y, (Color){ 0, 0, 0, 100 });
-
-        #define     SETTINGS_WIDTH      300
-        #define     SETTINGS_HEIGHT     175
-
-        DrawRectangle((canvasSize.x - SETTINGS_WIDTH)/2, (canvasSize.y - SETTINGS_HEIGHT)/2, SETTINGS_WIDTH, SETTINGS_HEIGHT, LIGHTGRAY);
-        DrawRectangleLines((canvasSize.x - SETTINGS_WIDTH)/2, (canvasSize.y - SETTINGS_HEIGHT)/2, SETTINGS_WIDTH, SETTINGS_HEIGHT, BLACK);
-
-        DrawText("Settings", (canvasSize.x - SETTINGS_WIDTH)/2 + 15, (canvasSize.y - SETTINGS_HEIGHT)/2 + 15, 20, BLACK);
-        DrawText("Shader version", (canvasSize.x - SETTINGS_WIDTH)/2 + 15, (canvasSize.y - SETTINGS_HEIGHT)/2 + 50, 10, BLACK);
-        DrawText(((version == 0) ? "GLSL 330" : "GLSL 100"), (canvasSize.x - SETTINGS_WIDTH)/2 + SETTINGS_WIDTH/1.9f + MeasureText(((version == 0) ? "GLSL 330" : "GLSL 100"), 10)/2, (canvasSize.y - SETTINGS_HEIGHT)/2 + 50, 10, BLACK);
-
-        if (FButton((Rectangle){ (canvasSize.x - SETTINGS_WIDTH)/2 + SETTINGS_WIDTH/2 - 20, (canvasSize.y - SETTINGS_HEIGHT)/2 + 45, 20, 20 }, "<"))
-        {
-            version--; 
-            if (version < 0) version = 1;
-        }
-
-        if (FButton((Rectangle){ (canvasSize.x - SETTINGS_WIDTH)/2 + SETTINGS_WIDTH - 40, (canvasSize.y - SETTINGS_HEIGHT)/2 + 45, 20, 20 }, ">"))
-        {
-            version++; 
-            if (version > 1) version = 0;
-        }
-
-        if (FButton((Rectangle){ (canvasSize.x - SETTINGS_WIDTH)/2 + SETTINGS_WIDTH/2 - 40, (canvasSize.y - SETTINGS_HEIGHT)/2 + SETTINGS_HEIGHT/2 + 45, 80, 25 }, "Close"))
-        {
-            settings = false;
-            interact = true;
-        }
-        
-        DrawText("Backface Culling", (canvasSize.x - SETTINGS_WIDTH)/2 + 15, (canvasSize.y - SETTINGS_HEIGHT)/2 + 85, 10, BLACK);
-        
-        backfaceCulling = FToggle((Rectangle){ canvasSize.x/2 + 40, canvasSize.y/2 - 7, 20, 20 }, backfaceCulling);
-    }
 
     if (compileState >= 0)
     {
         Rectangle compileRec = { UI_PADDING, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT };
         DrawRectangleRec(compileRec, ((compileState == 1) ? Fade(GREEN, 0.5f) : Fade(RED, 0.5f)));
     }
+}
+
+// Button element, returns true when pressed
+bool InterfaceButton(Rectangle bounds, const char *text)
+{
+    ButtonState buttonState = BUTTON_DEFAULT;
+
+    if (bounds.width < (MeasureText(text, 10) + 20)) bounds.width = MeasureText(text, 10) + 20;
+    if (bounds.height < 10) bounds.height = 10 + 40;
+
+    if (CheckCollisionPointRec(GetMousePosition(), bounds))
+    {
+        if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) buttonState = BUTTON_PRESSED;
+        else if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) buttonState = BUTTON_CLICKED;
+        else buttonState = BUTTON_HOVER;
+    }
+
+    DrawRectangleRec(bounds, COLOR_BUTTON_BORDER);
+    DrawRectangle(bounds.x + WIDTH_INTERFACE_BORDER, bounds.y + WIDTH_INTERFACE_BORDER, bounds.width - WIDTH_INTERFACE_BORDER*2,bounds.height - WIDTH_INTERFACE_BORDER*2, COLOR_BUTTON_SHAPE);
+    DrawText(text, bounds.x + ((bounds.width/2) - (MeasureText(text, 10)/2)), bounds.y + (bounds.height - 10)/2, 10, COLOR_BUTTON_BORDER);
+
+    if (buttonState == BUTTON_HOVER) DrawRectangleRec(bounds, COLOR_BUTTON_HIGHLIGHT);
+    else if (buttonState == BUTTON_PRESSED) DrawRectangleRec(bounds, COLOR_BUTTON_PRESSED);
+
+    menuOffset++;
+
+    return (buttonState == BUTTON_CLICKED);
+}
+
+// Button group element, returns true when pressed
+bool InterfaceButtonGroup(Rectangle bounds, const char *text, bool enabled)
+{
+    ButtonState buttonState = (enabled ? BUTTON_ACTIVE : BUTTON_DEFAULT);
+
+    if (bounds.width < (MeasureText(text, 10) + 20)) bounds.width = MeasureText(text, 10) + 20;
+    if (bounds.height < 10) bounds.height = 10 + 40;
+
+    if (CheckCollisionPointRec(GetMousePosition(), bounds))
+    {
+        if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) buttonState = BUTTON_PRESSED;
+        else if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) buttonState = BUTTON_CLICKED;
+        else buttonState = BUTTON_HOVER;
+    }
+    
+    #define     COLOR_BUTTON_ACTIVE_SHAPE   (Color){ 151, 232, 255, 255 }
+    #define     COLOR_BUTTON_ACTIVE_BORDER   (Color){ 4, 140, 199, 255 }
+
+    DrawRectangleRec(bounds, (enabled ? COLOR_BUTTON_ACTIVE_BORDER : COLOR_BUTTON_BORDER));
+    DrawRectangle(bounds.x + WIDTH_INTERFACE_BORDER, bounds.y + WIDTH_INTERFACE_BORDER, bounds.width - WIDTH_INTERFACE_BORDER*2,bounds.height - WIDTH_INTERFACE_BORDER*2, (enabled ? COLOR_BUTTON_ACTIVE_SHAPE : COLOR_BUTTON_SHAPE));
+    DrawText(text, bounds.x + ((bounds.width/2) - (MeasureText(text, 10)/2)), bounds.y + (bounds.height - 10)/2, 10, (enabled ? COLOR_BUTTON_ACTIVE_BORDER : COLOR_BUTTON_BORDER));
+
+    if (buttonState == BUTTON_HOVER) DrawRectangleRec(bounds, COLOR_BUTTON_HIGHLIGHT);
+    else if (buttonState == BUTTON_PRESSED) DrawRectangleRec(bounds, COLOR_BUTTON_PRESSED);
+
+    menuOffset++;
+
+    return (buttonState == BUTTON_CLICKED);
+}
+
+// Toggle Button element, returns true when active
+bool InterfaceToggle(Rectangle bounds, bool toggle)
+{
+    ToggleState toggleState = TOGGLE_UNACTIVE;
+    Rectangle toggleButton = bounds;
+    Vector2 mousePoint = GetMousePosition();
+
+    if (toggle) toggleState = TOGGLE_ACTIVE;
+    else toggleState = TOGGLE_UNACTIVE;
+
+    if (CheckCollisionPointRec(mousePoint, toggleButton))
+    {
+        if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) toggleState = TOGGLE_PRESSED;
+        else if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON))
+        {
+            if (toggle)
+            {
+                toggle = false;
+                toggleState = TOGGLE_UNACTIVE;
+                glDisable(GL_CULL_FACE);
+            }
+            else
+            {
+                toggle = true;
+                toggleState = TOGGLE_ACTIVE;
+                glEnable(GL_CULL_FACE);
+            }
+        }
+    }
+
+    DrawRectangleRec(toggleButton, COLOR_BUTTON_BORDER);
+    DrawRectangle(toggleButton.x + WIDTH_INTERFACE_BORDER, toggleButton.y + WIDTH_INTERFACE_BORDER , toggleButton.width - WIDTH_INTERFACE_BORDER*2, toggleButton.height - WIDTH_INTERFACE_BORDER*2, COLOR_INTERFACE_SHAPE);
+
+    if (toggleState == TOGGLE_PRESSED) DrawRectangleRec(toggleButton, COLOR_BUTTON_PRESSED);
+
+    if (toggle) DrawRectangle(toggleButton.x + WIDTH_INTERFACE_BORDER*4, toggleButton.y + WIDTH_INTERFACE_BORDER*4, toggleButton.width - WIDTH_INTERFACE_BORDER*8, toggleButton.height - WIDTH_INTERFACE_BORDER*8, COLOR_TOGGLE_ACTIVE);
+
+    return toggle;
 }
 
 // Returns the extension of a file
