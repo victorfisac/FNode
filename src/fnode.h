@@ -1814,9 +1814,21 @@ FNODEDEF void DrawNode(FNode node)
 
         if (node->inputShape.width > 0)
         {
-            if (node->inputsCount > 0) DrawRectangleRec(node->inputShape, ((CheckCollisionPointRec(GetMousePosition(), CameraToViewRec(node->inputShape, camera)) ? LIGHTGRAY : GRAY)));
-            else DrawRectangleRec(node->inputShape, ((CheckCollisionPointRec(GetMousePosition(), CameraToViewRec(node->inputShape, camera)) ? LIGHTGRAY : RED)));
-            DrawRectangleLines(node->inputShape.x, node->inputShape.y, node->inputShape.width, node->inputShape.height, BLACK);
+            if (node->inputsCount > 0)
+            {
+                DrawRectangleRec(node->inputShape, (Color){ 151, 232, 255, 255 });
+                DrawRectangleLines(node->inputShape.x, node->inputShape.y, node->inputShape.width, node->inputShape.height, (Color){ 4, 140, 199, 255 });
+            }
+            else
+            {
+                DrawRectangleRec(node->inputShape, RED);
+                DrawRectangleLines(node->inputShape.x, node->inputShape.y, node->inputShape.width, node->inputShape.height, BLACK);
+            }
+            
+            if(CheckCollisionPointRec(GetMousePosition(), CameraToViewRec(node->inputShape, camera)))
+                DrawRectangleRec(node->inputShape, (Color){ 255, 255, 255, 40 });
+
+            
         }
 
         if (node->outputShape.width > 0)
@@ -1890,26 +1902,26 @@ FNODEDEF void DrawNodeLine(FLine line)
             float radius = (fabs(to.y - from.y)/4 + 0.02f)*multiplier;
             float distance = FClamp(fabs(to.x - from.x)/100, 0.0f, 1.0f);
 
-            DrawLine(from.x, from.y, from.x, from.y, BLACK);
+            DrawLine(from.x, from.y, from.x, from.y, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
 
             while (angle < 90)
             {
-                DrawLine(from.x + FCos(angle*DEG2RAD)*radius*multiplier*distance, from.y + radius + FSin(angle*DEG2RAD)*radius, from.x + FCos((angle + 10)*DEG2RAD)*radius*multiplier*distance, from.y + radius + FSin((angle + 10)*DEG2RAD)*radius, BLACK);
+                DrawLine(from.x + FCos(angle*DEG2RAD)*radius*multiplier*distance, from.y + radius + FSin(angle*DEG2RAD)*radius, from.x + FCos((angle + 10)*DEG2RAD)*radius*multiplier*distance, from.y + radius + FSin((angle + 10)*DEG2RAD)*radius, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
                 angle += 10;
             }
 
             Vector2 lastPosition = { from.x, from.y + radius*2 };
-            DrawLine(lastPosition.x, lastPosition.y, to.x + FCos(270*DEG2RAD)*radius*multiplier, to.y - radius + FSin(270*DEG2RAD)*radius, BLACK);
+            DrawLine(lastPosition.x, lastPosition.y, to.x + FCos(270*DEG2RAD)*radius*multiplier, to.y - radius + FSin(270*DEG2RAD)*radius, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
             lastPosition.x = to.x;
 
             while (angle < 270)
             {
-                DrawLine(to.x + FCos(angle*DEG2RAD)*radius*multiplier*distance, to.y - radius + FSin(angle*DEG2RAD)*radius, to.x + FCos((angle + 10)*DEG2RAD)*radius*multiplier*distance, to.y - radius + FSin((angle + 10)*DEG2RAD)*radius, BLACK);
+                DrawLine(to.x + FCos(angle*DEG2RAD)*radius*multiplier*distance, to.y - radius + FSin(angle*DEG2RAD)*radius, to.x + FCos((angle + 10)*DEG2RAD)*radius*multiplier*distance, to.y - radius + FSin((angle + 10)*DEG2RAD)*radius, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
                 angle += 10;
             }
 
             lastPosition.y = lastPosition.y + radius*2;
-            DrawLine(to.x, to.y, to.x, to.y, BLACK);
+            DrawLine(to.x, to.y, to.x, to.y, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
         }
 
         if (indexFrom != -1 && indexTo != -1)

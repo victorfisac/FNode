@@ -105,6 +105,7 @@ typedef enum {
 Vector2 mousePosition = { 0, 0 };           // Current mouse position
 Vector2 lastMousePosition = { 0, 0 };       // Previous frame mouse position
 Vector2 mouseDelta = { 0, 0 };              // Current frame mouse position increment since previous frame
+bool overUI = false;                        // True when current mouse position is over interface
 Vector2 currentOffset = { 0, 0 };           // Current selected node offset between mouse position and node shape
 float modelRotation = 0.0f;                 // Current model visualization rotation angle
 int scrollState = 0;                        // Current mouse drag interface scroll state
@@ -145,6 +146,7 @@ int framesCounter = 0;                      // Global frames counter
 int compileFrame = 0;                       // Compile time frames count
 Texture2D iconTex;                          // FNode icon texture used in help message
 char *texPaths[MAX_TEXTURES] = { 0 };       // File path of current loaded textures
+RenderTexture2D gridTarget;                 // Grid display render target
 
 //----------------------------------------------------------------------------------
 // Functions Declaration
@@ -475,6 +477,8 @@ void UpdateMouseData()
     lastMousePosition = mousePosition;
     mousePosition = GetMousePosition();
     mouseDelta = (Vector2){ mousePosition.x - lastMousePosition.x, mousePosition.y - lastMousePosition.y };
+    overUI = CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y });
+    if (!overUI) CheckCollisionPointRec(mousePosition, (Rectangle){ canvasSize.x, 0, screenSize.x - canvasSize.x, screenSize.y });
 }
 
 // Updates current inputs states
@@ -556,8 +560,6 @@ void UpdateNodesEdit()
             {
                 for (int k = 0; k < nodes[i]->output.dataCount; k++)
                 {
-                    if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
-
                     if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->output.data[k].shape, camera)))
                     {
                         index = i;
@@ -625,8 +627,6 @@ void UpdateNodesDrag()
         {
             for (int i = nodesCount - 1; i >= 0; i--)
             {
-                if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
-
                 if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->shape, camera)))
                 {
                     selectedNode = nodes[i]->id;
@@ -688,8 +688,6 @@ void UpdateNodesLink()
                 {
                     for (int i = nodesCount - 1; i >= 0; i--)
                     {
-                        if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
-
                         if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->outputShape, camera)))
                         {
                             tempLine = CreateNodeLine(nodes[i]->id);
@@ -702,8 +700,6 @@ void UpdateNodesLink()
                 {
                     for (int i = nodesCount - 1; i >= 0; i--)
                     {
-                        if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
-
                         if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->outputShape, camera)))
                         {
                             for (int k = linesCount - 1; k >= 0; k--)
@@ -735,8 +731,6 @@ void UpdateNodesLink()
                 {
                     for (int i = 0; i < nodesCount; i++)
                     {
-                        if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
-
                         if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->inputShape, camera)) && (nodes[i]->id != tempLine->from) && (nodes[i]->inputsCount < nodes[i]->inputsLimit))
                         {
                             // Get which index has the first input node id from current nude                            
@@ -857,8 +851,6 @@ void UpdateCommentCreationEdit()
                     {
                         for (int i = 0; i < commentsCount; i++)
                         {
-                            if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
-
                             if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->sizeTShape, camera)))
                             {
                                 editSize = comments[i]->id;
@@ -1035,8 +1027,6 @@ void UpdateCommentsDrag()
             {
                 for (int i = commentsCount - 1; i >= 0; i--)
                 {
-                    if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
-
                     if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->shape, camera)))
                     {
                         selectedComment = comments[i]->id;
@@ -1062,8 +1052,6 @@ void UpdateCommentsDrag()
         {
             for (int i = commentsCount - 1; i >= 0; i--)
             {
-                if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
-
                 if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->shape, camera)))
                 {
                     DestroyComment(comments[i]);
@@ -1076,8 +1064,6 @@ void UpdateCommentsDrag()
     {
         for (int i = 0; i < commentsCount; i++)
         {
-            if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
-
             if (comments[i]->id == selectedComment)
             {
                 comments[i]->shape.x = mousePosition.x - currentOffset.x;
@@ -1122,8 +1108,6 @@ void UpdateCommentsEdit()
         {
             for (int i = 0; i < commentsCount; i++)
             {
-                if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
-
                 if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->valueShape, camera)))
                 {
                     editComment = i;
@@ -1137,8 +1121,6 @@ void UpdateCommentsEdit()
             int currentEdit = editComment;
             for (int i = 0; i < commentsCount; i++)
             {
-                if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
-
                 if (comments[i]->id == editComment)
                 {
                     if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->valueShape, camera)))
@@ -2007,9 +1989,19 @@ void DrawCanvas()
     DrawText("FNODE 1.0", (canvasSize.x - MeasureText("FNODE 1.0", 120))/2, canvasSize.y/2 - 60, 120, Fade(LIGHTGRAY, UI_GRID_ALPHA*2));
     DrawText("VICTOR FISAC", (canvasSize.x - MeasureText("VICTOR FISAC", 40))/2, canvasSize.y*0.65f - 20, 40, Fade(LIGHTGRAY, UI_GRID_ALPHA*2));
 
-    Begin2dMode(camera);
+    BeginTextureMode(gridTarget);
 
-        DrawCanvasGrid(UI_GRID_COUNT);
+        Begin2dMode(camera);
+
+            DrawCanvasGrid(UI_GRID_COUNT);
+
+        End2dMode();
+
+    EndTextureMode();
+
+    DrawTexturePro(gridTarget.texture, (Rectangle){ 0, 0, gridTarget.texture.width, -gridTarget.texture.height }, (Rectangle){ 0, 0, screenSize.x, screenSize.y }, (Vector2){ 0, 0 }, 0, WHITE);
+
+    Begin2dMode(camera);
 
         // Draw all created comments, lines and nodes
         for (int i = 0; i < commentsCount; i++) DrawComment(comments[i]);
@@ -2029,7 +2021,7 @@ void DrawCanvasGrid(int divisions)
     {
         for (int k = 0; k < 5; k++)
         {
-            DrawRectangle(-(divisions/2*UI_GRID_SPACING*5) + spacing, -100000, 1, 200000, ((k == 0) ? Fade(BLACK, UI_GRID_ALPHA*2) : Fade(GRAY, UI_GRID_ALPHA)));
+            DrawRectangle(-(divisions/2*UI_GRID_SPACING*5) + spacing, -100000, 1, 200000, ((k == 0) ? COLOR_BUTTON_BORDER : COLOR_BUTTON_SHAPE));
             spacing += UI_GRID_SPACING;
         }
     }
@@ -2039,7 +2031,7 @@ void DrawCanvasGrid(int divisions)
     {
         for (int k = 0; k < 5; k++)
         {
-            DrawRectangle(-100000, -(divisions/2*UI_GRID_SPACING*5) + spacing, 200000, 1, ((k == 0) ? Fade(BLACK, UI_GRID_ALPHA*2) : Fade(GRAY, UI_GRID_ALPHA)));
+            DrawRectangle(-100000, -(divisions/2*UI_GRID_SPACING*5) + spacing, 200000, 1, ((k == 0) ? COLOR_BUTTON_BORDER : COLOR_BUTTON_SHAPE));
             spacing += UI_GRID_SPACING;
         }
     }
@@ -2060,7 +2052,7 @@ void DrawVisor()
 
         Begin3dMode(camera3d);
 
-            DrawModelEx(model, (Vector3){ 0.0f, -1.0f, 0.0f }, (Vector3){ 0, 1, 0 }, modelRotation, (Vector3){ VISOR_MODEL_SCALE, VISOR_MODEL_SCALE, VISOR_MODEL_SCALE }, RED);
+            DrawModelEx(model, (Vector3){ 0.0f, -1.0f, 0.0f }, (Vector3){ 0, 1, 0 }, modelRotation, (Vector3){ VISOR_MODEL_SCALE, VISOR_MODEL_SCALE, VISOR_MODEL_SCALE }, WHITE);
 
         End3dMode();
         
@@ -2485,6 +2477,7 @@ int main()
     model = LoadModel(MODEL_PATH);
     if (model.mesh.vertexCount > 0) loadedModel = true;
     visorTarget = LoadRenderTexture(screenSize.x/4, screenSize.y/4);
+    gridTarget = LoadRenderTexture(screenSize.x, screenSize.y);
     fxaa = LoadShader(FXAA_VERTEX, FXAA_FRAGMENT);
     textures[0] = LoadTexture(MODEL_TEXTURE_WINDAMOUNT);
     textures[1] = LoadTexture(MODEL_TEXTURE_DIFFUSE);
@@ -2525,11 +2518,18 @@ int main()
 
             if (!fullVisor)
             {
-                UpdateNodesEdit();
+                if (!overUI)
+                    UpdateNodesEdit();
+
                 UpdateNodesDrag();
-                UpdateNodesLink();
-                UpdateCommentCreationEdit();
-                UpdateCommentsEdit();
+
+                if (!overUI)
+                {
+                    UpdateNodesLink();
+                    UpdateCommentCreationEdit();
+                    UpdateCommentsEdit();
+                }
+
                 UpdateCommentsDrag();
             }
         }
@@ -2557,6 +2557,7 @@ int main()
     // De-Initialization
     //--------------------------------------------------------------------------------------
     UnloadTexture(iconTex);
+    UnloadRenderTexture(gridTarget);
     UnloadRenderTexture(visorTarget);
     if (loadedModel)
     {
