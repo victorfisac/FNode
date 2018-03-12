@@ -556,6 +556,8 @@ void UpdateNodesEdit()
             {
                 for (int k = 0; k < nodes[i]->output.dataCount; k++)
                 {
+                    if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
+
                     if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->output.data[k].shape, camera)))
                     {
                         index = i;
@@ -623,6 +625,8 @@ void UpdateNodesDrag()
         {
             for (int i = nodesCount - 1; i >= 0; i--)
             {
+                if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
+
                 if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->shape, camera)))
                 {
                     selectedNode = nodes[i]->id;
@@ -684,6 +688,8 @@ void UpdateNodesLink()
                 {
                     for (int i = nodesCount - 1; i >= 0; i--)
                     {
+                        if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
+
                         if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->outputShape, camera)))
                         {
                             tempLine = CreateNodeLine(nodes[i]->id);
@@ -696,6 +702,8 @@ void UpdateNodesLink()
                 {
                     for (int i = nodesCount - 1; i >= 0; i--)
                     {
+                        if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
+
                         if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->outputShape, camera)))
                         {
                             for (int k = linesCount - 1; k >= 0; k--)
@@ -727,6 +735,8 @@ void UpdateNodesLink()
                 {
                     for (int i = 0; i < nodesCount; i++)
                     {
+                        if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
+
                         if (CheckCollisionPointRec(mousePosition, CameraToViewRec(nodes[i]->inputShape, camera)) && (nodes[i]->id != tempLine->from) && (nodes[i]->inputsCount < nodes[i]->inputsLimit))
                         {
                             // Get which index has the first input node id from current nude                            
@@ -847,6 +857,8 @@ void UpdateCommentCreationEdit()
                     {
                         for (int i = 0; i < commentsCount; i++)
                         {
+                            if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
+
                             if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->sizeTShape, camera)))
                             {
                                 editSize = comments[i]->id;
@@ -1023,6 +1035,8 @@ void UpdateCommentsDrag()
             {
                 for (int i = commentsCount - 1; i >= 0; i--)
                 {
+                    if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
+
                     if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->shape, camera)))
                     {
                         selectedComment = comments[i]->id;
@@ -1048,6 +1062,8 @@ void UpdateCommentsDrag()
         {
             for (int i = commentsCount - 1; i >= 0; i--)
             {
+                if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
+
                 if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->shape, camera)))
                 {
                     DestroyComment(comments[i]);
@@ -1060,6 +1076,8 @@ void UpdateCommentsDrag()
     {
         for (int i = 0; i < commentsCount; i++)
         {
+            if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
+
             if (comments[i]->id == selectedComment)
             {
                 comments[i]->shape.x = mousePosition.x - currentOffset.x;
@@ -1104,6 +1122,8 @@ void UpdateCommentsEdit()
         {
             for (int i = 0; i < commentsCount; i++)
             {
+                if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
+
                 if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->valueShape, camera)))
                 {
                     editComment = i;
@@ -1117,6 +1137,8 @@ void UpdateCommentsEdit()
             int currentEdit = editComment;
             for (int i = 0; i < commentsCount; i++)
             {
+                if (CheckCollisionPointRec(mousePosition, (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y })) continue;
+
                 if (comments[i]->id == editComment)
                 {
                     if (CheckCollisionPointRec(mousePosition, CameraToViewRec(comments[i]->valueShape, camera)))
@@ -2226,8 +2248,9 @@ void DrawInterface()
             DrawRectangle(dest.x + WIDTH_INTERFACE_BORDER, dest.y + WIDTH_INTERFACE_BORDER, 
             dest.width - WIDTH_INTERFACE_BORDER*2, dest.height - WIDTH_INTERFACE_BORDER*2, COLOR_BUTTON_SHAPE);
             DrawText("DROP", dest.x + (dest.width - MeasureText("DROP", 10))/2, dest.y + dest.height/2 - 24 - 5, 10, COLOR_BUTTON_BORDER);
-            DrawText("TEXTURE", dest.x + (dest.width - MeasureText("TEXTURE", 10))/2, dest.y + dest.height/2 - 5, 10, COLOR_BUTTON_BORDER);
-            DrawText("HERE", dest.x + (dest.width - MeasureText("HERE", 10))/2, dest.y + dest.height/2 + 24 - 5, 0, COLOR_BUTTON_BORDER);
+            DrawText("TEXTURE", dest.x + (dest.width - MeasureText("TEXTURE", 10))/2, dest.y + dest.height/2 - 13, 10, COLOR_BUTTON_BORDER);
+            DrawText(FormatText("UNIT %i", i), dest.x + (dest.width - MeasureText(FormatText("UNIT %i", i), 10))/2, dest.y + dest.height/2 + 3, 10, COLOR_BUTTON_BORDER);
+            DrawText("HERE", dest.x + (dest.width - MeasureText("HERE", 10))/2, dest.y + dest.height/2 + 20, 0, COLOR_BUTTON_BORDER);
         }
 
         if (rowEnd)
