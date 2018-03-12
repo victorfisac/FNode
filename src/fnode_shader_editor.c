@@ -46,7 +46,7 @@
 #define     EXAMPLE_VERTEX_PATH         "res/example/output/shader.vs"              // Vertex shader output path of start example
 #define     EXAMPLE_FRAGMENT_PATH       "res/example/output/shader.fs"              // Fragment shader output path of start example
 #define     EXAMPLE_DATA_PATH           "res/example/output/shader.fnode"           // Shader data output path of start example
-#define     MAX_TEXTURES                30                                          // Shader maximum texture units
+#define     MAX_TEXTURES                8                                           // Shader maximum OpenGL texture units
 #define     COMPILE_DURATION            120                                         // Shader compile result duration
 #define     MODEL_PATH                  "res/example/meshes/plant.obj"              // Example model file path
 #define     MODEL_TEXTURE_DIFFUSE       "res/example/textures/plant_color.png"      // Example model color texture file path
@@ -68,6 +68,8 @@
 #define     COLOR_HELP_BORDER           (Color){ 255, 255, 255, 128 }
 #define     COLOR_HELP_TEXT             (Color){ 245, 245, 245, 255 }
 #define     COLOR_SECTION_TITLE         (Color){ 104, 104, 104, 255 }
+#define     COLOR_BUTTON_ACTIVE_SHAPE   (Color){ 151, 232, 255, 255 }
+#define     COLOR_BUTTON_ACTIVE_BORDER  (Color){ 4, 140, 199, 255 }
 
 #define     PADDING_MAIN_LEFT           10
 #define     PADDING_MAIN_BOTTOM         20
@@ -113,6 +115,8 @@ Rectangle menuScrollRec = { 0, 0, 0, 0 };   // Interface scroll rectangle bounds
 Vector2 menuScrollLimits = { 5, 685 };      // Interface scroll rectangle position limits
 Rectangle canvasScroll = { 0, 0, 0, 0 };    // Interface scroll rectangle bounds
 Model model;                                // Visor default model for shader visualization
+bool loadedModel = false;                    // Loaded model in visor state
+Rectangle modelRect = { 0, 0, 0, 0 };       // Rectangle to drop model files
 RenderTexture2D visorTarget;                // Visor model visualization render target
 Shader fxaa;                                // Canvas and visor anti-aliasing postprocessing shader
 int fxaaUniform = -1;                       // FXAA shader viewport size uniform location point
@@ -123,20 +127,24 @@ int timeUniformV = -1;                      // Created shader current time unifo
 int timeUniformF = -1;                      // Created shader current time uniform location point in fragment shader
 bool loadedShader = false;                  // Current loaded custom shader state
 float currentTime = 0;                      // Current global time to send to shader as attribute
-char **droppedFiles;                        // Current dropped files paths
 Texture2D textures[MAX_TEXTURES] = { 0 };   // Shader texture unit textures
+Rectangle texRects[MAX_TEXTURES] = { 0 };   // Interfaces panels to display current loaded textures and unload them
+bool loadedtexRects = false;                // State of texRects initialization
 int loadedFiles = 0;                        // Loaded textures count
 bool usedUnits[MAX_TEXTURES] = { false };   // Shader compiling used texture units
+bool drawVisor = true;                      // Visor display enabled state
 bool fullVisor = false;                     // Visor full screen state
 bool help = false;                          // Display help message state
 bool visorState = false;                    // Visor camera control state
 bool settings = false;                      // Interface settings window state
 ShaderVersion version = GLSL_330;           // Current shader version setting
 bool backfaceCulling = false;               // Current shader backface culling state
+bool prevBackfaceCulling = false;           // Previous shader backface culling state
 int compileState = -1;                      // Compile state (awiting, successful, failed)
 int framesCounter = 0;                      // Global frames counter
 int compileFrame = 0;                       // Compile time frames count
 Texture2D iconTex;                          // FNode icon texture used in help message
+char *texPaths[MAX_TEXTURES] = { 0 };       // File path of current loaded textures
 
 //----------------------------------------------------------------------------------
 // Functions Declaration
@@ -170,6 +178,7 @@ bool InterfaceToggle(Rectangle bounds, bool toggle);        // Toggle Button ele
 char *GetFileExtension(char *filename);                     // Returns the extension of a file
 bool CheckFileExtension(char *filename, char *extension);   // Check filename for specific extension
 bool CheckTextureExtension(char *filename);                 // Check filename for compatible texture extensions
+bool CheckModelExtension(char *filename);                   // Check filename for compatible mesh extensions
 
 //----------------------------------------------------------------------------------
 // Functions Definition
@@ -186,6 +195,12 @@ void CheckPreviousShader(bool makeGraph)
         transformUniform = GetShaderLocation(shader, "modelMatrix");
         timeUniformV = GetShaderLocation(shader, "vertCurrentTime");
         timeUniformF = GetShaderLocation(shader, "fragCurrentTime");
+
+        shader.locs[LOC_MAP_ROUGHNESS] = glGetUniformLocation(shader.id, "texture3");
+        shader.locs[LOC_MAP_OCCUSION] = glGetUniformLocation(shader.id, "texture4");
+        shader.locs[LOC_MAP_EMISSION] = glGetUniformLocation(shader.id, "texture5");
+        shader.locs[LOC_MAP_HEIGHT] = glGetUniformLocation(shader.id, "texture6");
+        shader.locs[LOC_MAP_BRDF] = glGetUniformLocation(shader.id, "texture7");
 
         if (makeGraph)
         {
@@ -466,7 +481,7 @@ void UpdateMouseData()
 void UpdateInputsData()
 {
     if (IsKeyPressed('H')) help = !help;
-    else if (IsKeyPressed(KEY_RIGHT_ALT))
+    else if (IsKeyPressed(KEY_RIGHT_ALT) && drawVisor)
     {
         fullVisor = !fullVisor;
         UnloadRenderTexture(visorTarget);
@@ -1141,36 +1156,55 @@ void UpdateShaderData()
             compileFrame = 0;
         }
     }
-    
+
     if (IsFileDropped())
     {
         int filesCount = 0;
-        droppedFiles = GetDroppedFiles(&filesCount);
-        char *path = droppedFiles[0];
-        
-        if (CheckTextureExtension(path) && (loadedFiles < MAX_TEXTURES))
+        char **droppedFiles = GetDroppedFiles(&filesCount);
+
+        if (CheckTextureExtension(droppedFiles[0]))
         {
-            if (textures[loadedFiles].id != 0) UnloadTexture(textures[loadedFiles]);
-            textures[loadedFiles] = LoadTexture(path);
-            
-            if (shader.id > 0)
+            int index = -1;
+            for (int i = 0; i < MAX_TEXTURES; i++)
             {
-                switch (loadedFiles)
+                if (CheckCollisionPointRec(mousePosition, texRects[i]))
                 {
-                    case 0: model.material.maps[MAP_ALBEDO].texture = textures[loadedFiles]; break;
-                    case 1: model.material.maps[MAP_SPECULAR].texture = textures[loadedFiles]; break;
-                    case 2: model.material.maps[MAP_NORMAL].texture = textures[loadedFiles]; break;
-                    default: break;
+                    index = i;
+                    break;
                 }
             }
-            
-            loadedFiles++;
-            if (loadedFiles == MAX_TEXTURES) loadedFiles = 0;
+
+            if (index != -1)
+            {
+                if (textures[index].id != 0) UnloadTexture(textures[index]);
+                textures[index] = LoadTexture(droppedFiles[0]);
+                texPaths[index] = droppedFiles[0];
+
+                if (shader.id > 0) model.material.maps[index].texture = textures[index];
+
+                loadedFiles++;
+                if (loadedFiles == MAX_TEXTURES) loadedFiles = 0;
+            }
         }
-        else TraceLogFNode(false, "error when trying to import a non texture file or achieved maximum number of textures");
-        
-        
-        filesCount = 0;
+        else if (CheckModelExtension(droppedFiles[0]) && !loadedModel)
+        {
+            model = LoadModel(droppedFiles[0]);
+            model.material.shader = shader;
+
+            for (int i = 0; i < MAX_TEXTURES; i++)
+            {
+                if (textures[i].id != 0)
+                {
+                    model.material.maps[i].texture = textures[i];
+                    model.material.maps[i].color = WHITE;
+                    model.material.maps[i].value = 1.0f;
+                }
+            }
+
+            loadedModel = true;
+        }
+
+        ClearDroppedFiles();
     }
 
     if (shader.id > 0)
@@ -1230,6 +1264,8 @@ void SaveChanges()
         {
             for (int k = 0; k < nodesCount; k++)
             {
+                if (nodes[k] == NULL) continue;
+
                 if (nodes[k]->id == i)
                 {
                     float type = (float)nodes[k]->type;
@@ -1264,6 +1300,8 @@ void SaveChanges()
         {
             for (int k = 0; k < nodesCount; k++)
             {
+                if (lines[k] == NULL) continue;
+
                 if (lines[k]->id == i)
                 {
                     fprintf(dataFile, "?%i?%i\n", lines[k]->from, lines[k]->to);
@@ -2062,14 +2100,14 @@ void DrawInterface()
     DrawRectangleRec(sidebarRect, COLOR_INTERFACE_SHAPE);
     DrawRectangle(screenSize.x - canvasSize.x, 0, WIDTH_INTERFACE_BORDER, sidebarRect.height, COLOR_INTERFACE_BORDER);
 
-    Rectangle nodesRect = { sidebarRect.x + PADDING_MAIN_LEFT, PADDING_MAIN_TOP*0.75f, sidebarRect.width - PADDING_MAIN_LEFT*2, UI_BUTTON_HEIGHT*3 + PADDING_MAIN_BOTTOM*1.45f };
+    Rectangle nodesRect = { sidebarRect.x + PADDING_MAIN_LEFT, PADDING_MAIN_TOP*0.75f, sidebarRect.width - PADDING_MAIN_LEFT*2, UI_BUTTON_HEIGHT*3 + PADDING_MAIN_BOTTOM*1.15f };
     DrawRectangle(nodesRect.x - WIDTH_INTERFACE_BORDER, nodesRect.y - WIDTH_INTERFACE_BORDER, nodesRect.width + WIDTH_INTERFACE_BORDER*2, nodesRect.height + WIDTH_INTERFACE_BORDER*2, COLOR_INTERFACE_BORDER);
     DrawRectangleRec(nodesRect, COLOR_INTERFACE_SHAPE);
     DrawRectangle(nodesRect.x + PADDING_MAIN_LEFT, nodesRect.y - 5, MeasureText("Tools", 10) + PADDING_MAIN_LEFT, 10, COLOR_INTERFACE_SHAPE);
     DrawText("Tools", nodesRect.x + PADDING_MAIN_LEFT*1.5f, nodesRect.y - 5, 10, COLOR_SECTION_TITLE);
 
     nodesRect.x += PADDING_MAIN_LEFT/2;
-    nodesRect.y += PADDING_MAIN_TOP*0.75f;
+    nodesRect.y += PADDING_MAIN_TOP*0.5f;
     nodesRect.width -= PADDING_MAIN_LEFT;
     menuOffset = 0;
     
@@ -2077,7 +2115,7 @@ void DrawInterface()
     if (InterfaceButton((Rectangle){ nodesRect.x, nodesRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER)*menuOffset, nodesRect.width, UI_BUTTON_HEIGHT }, "Clear Graph")) ClearGraph();
     if (InterfaceButton((Rectangle){ nodesRect.x, nodesRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER)*menuOffset, nodesRect.width, UI_BUTTON_HEIGHT }, "Clear Unused")) ClearUnusedNodes();
     
-    nodesRect = (Rectangle){ sidebarRect.x + PADDING_MAIN_LEFT, UI_BUTTON_HEIGHT*4 + PADDING_MAIN_TOP*2, sidebarRect.width - PADDING_MAIN_LEFT*2, UI_BUTTON_HEIGHT*2 + PADDING_MAIN_BOTTOM*1.25f };
+    nodesRect = (Rectangle){ sidebarRect.x + PADDING_MAIN_LEFT, UI_BUTTON_HEIGHT*4 + PADDING_MAIN_TOP*1.25f, sidebarRect.width - PADDING_MAIN_LEFT*2, UI_BUTTON_HEIGHT*2 + PADDING_MAIN_BOTTOM*0.95f };
     DrawRectangle(nodesRect.x - WIDTH_INTERFACE_BORDER, nodesRect.y - WIDTH_INTERFACE_BORDER, nodesRect.width + WIDTH_INTERFACE_BORDER*2, nodesRect.height + WIDTH_INTERFACE_BORDER*2, COLOR_INTERFACE_BORDER);
     DrawRectangleRec(nodesRect, COLOR_INTERFACE_SHAPE);
     DrawRectangle(nodesRect.x + PADDING_MAIN_LEFT, nodesRect.y - 5, MeasureText("Compilation", 10) + PADDING_MAIN_LEFT, 10, COLOR_INTERFACE_SHAPE);
@@ -2085,84 +2123,123 @@ void DrawInterface()
 
     // Draw interface main buttons
     nodesRect.x += PADDING_MAIN_LEFT/2;
-    nodesRect.y += PADDING_MAIN_TOP*0.75f;
+    nodesRect.y += PADDING_MAIN_TOP*0.5f;
     nodesRect.width -= PADDING_MAIN_LEFT;
     menuOffset = 0;
 
-    if (InterfaceButton((Rectangle){ nodesRect.x, nodesRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER)*menuOffset, nodesRect.width, UI_BUTTON_HEIGHT }, "Compile")) CompileShader();
+    if (InterfaceButtonGroup((Rectangle){ nodesRect.x, nodesRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER)*menuOffset, nodesRect.width, UI_BUTTON_HEIGHT }, "Compile", (compileState >= 0))) CompileShader();
     if (InterfaceButton((Rectangle){ nodesRect.x, nodesRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER)*menuOffset, nodesRect.width, UI_BUTTON_HEIGHT }, "Save Changes")) SaveChanges();
 
-    nodesRect = (Rectangle){ sidebarRect.x + PADDING_MAIN_LEFT, UI_BUTTON_HEIGHT*8 + PADDING_MAIN_TOP*1.5f, sidebarRect.width - PADDING_MAIN_LEFT*2, UI_BUTTON_HEIGHT*2 + PADDING_MAIN_TOP*0.5f };
+    nodesRect = (Rectangle){ sidebarRect.x + PADDING_MAIN_LEFT, UI_BUTTON_HEIGHT*7 + PADDING_MAIN_TOP*1.5f, sidebarRect.width - PADDING_MAIN_LEFT*2, UI_BUTTON_HEIGHT*3 };
     DrawRectangle(nodesRect.x - WIDTH_INTERFACE_BORDER, nodesRect.y - WIDTH_INTERFACE_BORDER, nodesRect.width + WIDTH_INTERFACE_BORDER*2, nodesRect.height + WIDTH_INTERFACE_BORDER*2, COLOR_INTERFACE_BORDER);
     DrawRectangleRec(nodesRect, COLOR_INTERFACE_SHAPE);
     DrawRectangle(nodesRect.x + PADDING_MAIN_LEFT, nodesRect.y - 5, MeasureText("Configuration", 10) + PADDING_MAIN_LEFT, 10, COLOR_INTERFACE_SHAPE);
     DrawText("Configuration", nodesRect.x + PADDING_MAIN_LEFT*1.5f, nodesRect.y - 5, 10, COLOR_SECTION_TITLE);
 
     nodesRect.x += PADDING_MAIN_LEFT/2;
-    nodesRect.y += PADDING_MAIN_TOP*0.75f;
+    nodesRect.y += PADDING_MAIN_TOP*0.5f;
     nodesRect.width -= PADDING_MAIN_LEFT;
     menuOffset = 0;
     
     if (InterfaceButtonGroup((Rectangle){ nodesRect.x, nodesRect.y, nodesRect.width/2 - PADDING_MAIN_CENTER, UI_BUTTON_HEIGHT*0.75f }, "GLSL 330", (version == 0))) version = 0;
     if (InterfaceButtonGroup((Rectangle){ nodesRect.x + (nodesRect.width/2*menuOffset), nodesRect.y, nodesRect.width/2 - PADDING_MAIN_CENTER, UI_BUTTON_HEIGHT*0.75f }, "GLSL 110", (version == 1))) version = 1;
+    
+    prevBackfaceCulling = backfaceCulling;
     backfaceCulling = InterfaceToggle((Rectangle){ nodesRect.x, nodesRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER), 16, 16 }, backfaceCulling);
-    DrawText("Backface Culling", nodesRect.x + PADDING_MAIN_LEFT*3, nodesRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER) + 3, 10, COLOR_SECTION_TITLE);
+    if (prevBackfaceCulling != backfaceCulling) SetBackfaceCulling(backfaceCulling);
 
-    nodesRect = (Rectangle){ sidebarRect.x + PADDING_MAIN_LEFT, UI_BUTTON_HEIGHT*12 + PADDING_MAIN_TOP*0.25f, sidebarRect.width - PADDING_MAIN_LEFT*2, UI_BUTTON_HEIGHT*11 + PADDING_MAIN_TOP*1.3f };
+    DrawText("Backface Culling", nodesRect.x + PADDING_MAIN_LEFT*3, nodesRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER) + 3, 10, COLOR_SECTION_TITLE);
+    drawVisor = InterfaceToggle((Rectangle){ nodesRect.x, nodesRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER)*1.75f, 16, 16 }, drawVisor);
+    DrawText("Draw preview", nodesRect.x + PADDING_MAIN_LEFT*3, nodesRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER)*1.75f + 3, 10, COLOR_SECTION_TITLE);
+
+    nodesRect = (Rectangle){ sidebarRect.x + PADDING_MAIN_LEFT, UI_BUTTON_HEIGHT*11 + PADDING_MAIN_TOP*0.8f, sidebarRect.width - PADDING_MAIN_LEFT*2, UI_BUTTON_HEIGHT*12 + PADDING_MAIN_TOP*1.6f };
     DrawRectangle(nodesRect.x - WIDTH_INTERFACE_BORDER, nodesRect.y - WIDTH_INTERFACE_BORDER, nodesRect.width + WIDTH_INTERFACE_BORDER*2, nodesRect.height + WIDTH_INTERFACE_BORDER*2, COLOR_INTERFACE_BORDER);
     DrawRectangleRec(nodesRect, COLOR_INTERFACE_SHAPE);
-    DrawRectangle(nodesRect.x + PADDING_MAIN_LEFT, nodesRect.y - 5, MeasureText("Textures", 10) + PADDING_MAIN_LEFT, 10, COLOR_INTERFACE_SHAPE);
-    DrawText("Textures", nodesRect.x + PADDING_MAIN_LEFT*1.5f, nodesRect.y - 5, 10, COLOR_SECTION_TITLE);
+    DrawRectangle(nodesRect.x + PADDING_MAIN_LEFT, nodesRect.y - 5, MeasureText("Resources", 10) + PADDING_MAIN_LEFT, 10, COLOR_INTERFACE_SHAPE);
+    DrawText("Resources", nodesRect.x + PADDING_MAIN_LEFT*1.5f, nodesRect.y - 5, 10, COLOR_SECTION_TITLE);
 
     nodesRect.x += PADDING_MAIN_LEFT/2;
-    nodesRect.y += PADDING_MAIN_TOP*0.75f;
+    nodesRect.y += PADDING_MAIN_TOP*0.55f;
     nodesRect.width -= PADDING_MAIN_LEFT;
+
+    DrawRectangle(nodesRect.x, nodesRect.y, 
+                    nodesRect.width, UI_BUTTON_HEIGHT, COLOR_BUTTON_BORDER);
+    DrawRectangle(nodesRect.x + WIDTH_INTERFACE_BORDER, nodesRect.y + WIDTH_INTERFACE_BORDER, 
+                    nodesRect.width - WIDTH_INTERFACE_BORDER*2, UI_BUTTON_HEIGHT - WIDTH_INTERFACE_BORDER*2, COLOR_BUTTON_SHAPE);
+
+    if (!loadedtexRects) modelRect = (Rectangle){ nodesRect.x, nodesRect.y, nodesRect.width, UI_BUTTON_HEIGHT };
+
+    if (loadedModel)
+    {
+        DrawText("MESH LOADED", nodesRect.x + MeasureText("MESH LOADED", 10)/2 - PADDING_MAIN_LEFT*0.5f, nodesRect.y + UI_BUTTON_HEIGHT/2 - WIDTH_INTERFACE_BORDER*2 - 2, 10, COLOR_BUTTON_BORDER);
+        
+        if (InterfaceButton((Rectangle){ nodesRect.x + nodesRect.width - 30, nodesRect.y + 4, 22, 22 }, "X"))
+        {
+            loadedModel = false;
+            UnloadMesh(&model.mesh);
+
+            for (int i = 0; i < MAX_TEXTURES; i++)
+            {
+                if (texPaths[i] != NULL) textures[i] = LoadTexture(texPaths[i]);
+            }
+        }
+    }
+    else DrawText("DROP MESH HERE", nodesRect.x + MeasureText("DROP MESH HERE", 10)/2 - PADDING_MAIN_LEFT, nodesRect.y + UI_BUTTON_HEIGHT/2 - WIDTH_INTERFACE_BORDER*2 - 2, 10, COLOR_BUTTON_BORDER);
+
+    nodesRect.y += PADDING_MAIN_TOP*2.0f;
     menuOffset = 0;
     int menuOffsetY = 0;
 
-    if (InterfaceButton((Rectangle){ nodesRect.x, nodesRect.y, nodesRect.width/2 - PADDING_MAIN_CENTER/2, nodesRect.width/2 }, "Unit 0"))
+    for (int i = 0; i < MAX_TEXTURES; i++)
     {
-        // TODO: assign texture unit 0
-    }
-    if (InterfaceButton((Rectangle){ nodesRect.x + (nodesRect.width/2 + PADDING_MAIN_CENTER/2)*menuOffset, nodesRect.y, nodesRect.width/2 - PADDING_MAIN_CENTER/2, nodesRect.width/2 }, "Unit 1"))
-    {
-        // TODO: assign texture unit 1
+        Rectangle source = { 0, 0, textures[i].width, textures[i].height };
+
+        bool rowEnd = ((i % 2) == 1);
+        Rectangle dest;
+        if (rowEnd)
+            dest = (Rectangle){ nodesRect.x + (nodesRect.width/2 + PADDING_MAIN_CENTER/2)*menuOffset, nodesRect.y + (PADDING_MAIN_CENTER + nodesRect.width/2)*menuOffsetY, 
+            nodesRect.width/2 - PADDING_MAIN_CENTER/2, nodesRect.width/2 };
+        else
+            dest = (Rectangle){ nodesRect.x + (nodesRect.width/2 + PADDING_MAIN_CENTER/2)*menuOffset, nodesRect.y + 
+            (PADDING_MAIN_CENTER + nodesRect.width/2)*menuOffsetY, nodesRect.width/2 - PADDING_MAIN_CENTER/2, nodesRect.width/2 };
+
+        if (!loadedtexRects) texRects[i] = dest;
+
+        DrawRectangleRec(dest, COLOR_BUTTON_BORDER);
+
+        if (textures[i].id != 0)
+        {
+            DrawTexturePro(textures[i], source, (Rectangle){ dest.x + WIDTH_INTERFACE_BORDER, dest.y + WIDTH_INTERFACE_BORDER, 
+            dest.width - WIDTH_INTERFACE_BORDER*2, dest.height - WIDTH_INTERFACE_BORDER*2 }, (Vector2){ 0, 0 }, 0, WHITE);
+
+            if (InterfaceButton((Rectangle){ texRects[i].x + texRects[i].width - 20 - 10, texRects[i].y + 4, 20, 20 }, "X"))
+            {
+                UnloadTexture(textures[i]);
+                textures[i].id = 0;
+                texPaths[i] = NULL;
+            }
+        }
+        else menuOffset++;
+
+        if (textures[i].id == 0)
+        {
+            DrawRectangle(dest.x + WIDTH_INTERFACE_BORDER, dest.y + WIDTH_INTERFACE_BORDER, 
+            dest.width - WIDTH_INTERFACE_BORDER*2, dest.height - WIDTH_INTERFACE_BORDER*2, COLOR_BUTTON_SHAPE);
+            DrawText("DROP", dest.x + (dest.width - MeasureText("DROP", 10))/2, dest.y + dest.height/2 - 24 - 5, 10, COLOR_BUTTON_BORDER);
+            DrawText("TEXTURE", dest.x + (dest.width - MeasureText("TEXTURE", 10))/2, dest.y + dest.height/2 - 5, 10, COLOR_BUTTON_BORDER);
+            DrawText("HERE", dest.x + (dest.width - MeasureText("HERE", 10))/2, dest.y + dest.height/2 + 24 - 5, 0, COLOR_BUTTON_BORDER);
+        }
+
+        if (rowEnd)
+        {
+            menuOffset = 0;
+            menuOffsetY++;
+        }
     }
 
-    menuOffsetY++;
-    menuOffset = 0;
-    if (InterfaceButton((Rectangle){ nodesRect.x, nodesRect.y + (nodesRect.width/2 + PADDING_MAIN_CENTER)*menuOffsetY, nodesRect.width/2 - PADDING_MAIN_CENTER/2, nodesRect.width/2 }, "Unit 2"))
-    {
-        // TODO: assign texture unit 2
-    }
-    if (InterfaceButton((Rectangle){ nodesRect.x + (nodesRect.width + PADDING_MAIN_CENTER)/2*menuOffset, nodesRect.y + (nodesRect.width/2 + PADDING_MAIN_CENTER)*menuOffsetY, nodesRect.width/2 - PADDING_MAIN_CENTER/2, nodesRect.width/2 }, "Unit 3"))
-    {
-        // TODO: assign texture unit 3
-    }
-    
-    menuOffsetY++;
-    menuOffset = 0;
-    if (InterfaceButton((Rectangle){ nodesRect.x, nodesRect.y + (nodesRect.width/2 + PADDING_MAIN_CENTER)*menuOffsetY, nodesRect.width/2 - PADDING_MAIN_CENTER/2, nodesRect.width/2 }, "Unit 4"))
-    {
-        // TODO: assign texture unit 4
-    }
-    if (InterfaceButton((Rectangle){ nodesRect.x + (nodesRect.width + PADDING_MAIN_CENTER)/2*menuOffset, nodesRect.y + (nodesRect.width/2 + PADDING_MAIN_CENTER)*menuOffsetY, nodesRect.width/2 - PADDING_MAIN_CENTER/2, nodesRect.width/2 }, "Unit 5"))
-    {
-        // TODO: assign texture unit 5
-    }
+    loadedtexRects = true;
 
-    menuOffsetY++;
-    menuOffset = 0;
-    if (InterfaceButton((Rectangle){ nodesRect.x, nodesRect.y + (nodesRect.width/2 + PADDING_MAIN_CENTER)*menuOffsetY, nodesRect.width/2 - PADDING_MAIN_CENTER/2, nodesRect.width/2 }, "Unit 6"))
-    {
-        // TODO: assign texture unit 6
-    }
-    if (InterfaceButton((Rectangle){ nodesRect.x + (nodesRect.width + PADDING_MAIN_CENTER)/2*menuOffset, nodesRect.y + (nodesRect.width/2 + PADDING_MAIN_CENTER)*menuOffsetY, nodesRect.width/2 - PADDING_MAIN_CENTER/2, nodesRect.width/2 }, "Unit 7"))
-    {
-        // TODO: assign texture unit 7
-    }
-
-    nodesRect = (Rectangle){ sidebarRect.x + PADDING_MAIN_LEFT, UI_BUTTON_HEIGHT*24 + PADDING_MAIN_TOP*1.4f, sidebarRect.width - PADDING_MAIN_LEFT*2, UI_BUTTON_HEIGHT + PADDING_MAIN_TOP*0.25f };
+    nodesRect = (Rectangle){ sidebarRect.x + PADDING_MAIN_LEFT, UI_BUTTON_HEIGHT*24 + PADDING_MAIN_TOP*1.7f, sidebarRect.width - PADDING_MAIN_LEFT*2, UI_BUTTON_HEIGHT + PADDING_MAIN_TOP*0.25f };
     DrawRectangle(nodesRect.x - WIDTH_INTERFACE_BORDER, nodesRect.y - WIDTH_INTERFACE_BORDER, nodesRect.width + WIDTH_INTERFACE_BORDER*2, nodesRect.height + WIDTH_INTERFACE_BORDER*2, COLOR_INTERFACE_BORDER);
     DrawRectangleRec(nodesRect, COLOR_INTERFACE_SHAPE);
     DrawRectangle(nodesRect.x + PADDING_MAIN_LEFT, nodesRect.y - 5, MeasureText("Credits", 10) + PADDING_MAIN_LEFT, 10, COLOR_INTERFACE_SHAPE);
@@ -2251,12 +2328,6 @@ void DrawInterface()
     DrawRectangle(menuScrollRec.x - 3, 2, menuScrollRec.width + 6, screenSize.y - 4, (Color){ UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, 255 });
     DrawRectangle(menuScrollRec.x - 2, menuScrollRec.y - 2, menuScrollRec.width + 4, menuScrollRec.height + 4, DARKGRAY);
     DrawRectangleRec(menuScrollRec, ((scrollState == 1) ? LIGHTGRAY : RAYWHITE));
-
-    if (compileState >= 0)
-    {
-        Rectangle compileRec = { UI_PADDING, screenSize.y - (UI_BUTTON_HEIGHT + UI_PADDING), (screenSize.x - canvasSize.x - UI_PADDING*2)/2, UI_BUTTON_HEIGHT };
-        DrawRectangleRec(compileRec, ((compileState == 1) ? Fade(GREEN, 0.5f) : Fade(RED, 0.5f)));
-    }
 }
 
 // Button element, returns true when pressed
@@ -2300,9 +2371,6 @@ bool InterfaceButtonGroup(Rectangle bounds, const char *text, bool enabled)
         else if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) buttonState = BUTTON_CLICKED;
         else buttonState = BUTTON_HOVER;
     }
-    
-    #define     COLOR_BUTTON_ACTIVE_SHAPE   (Color){ 151, 232, 255, 255 }
-    #define     COLOR_BUTTON_ACTIVE_BORDER   (Color){ 4, 140, 199, 255 }
 
     DrawRectangleRec(bounds, (enabled ? COLOR_BUTTON_ACTIVE_BORDER : COLOR_BUTTON_BORDER));
     DrawRectangle(bounds.x + WIDTH_INTERFACE_BORDER, bounds.y + WIDTH_INTERFACE_BORDER, bounds.width - WIDTH_INTERFACE_BORDER*2,bounds.height - WIDTH_INTERFACE_BORDER*2, (enabled ? COLOR_BUTTON_ACTIVE_SHAPE : COLOR_BUTTON_SHAPE));
@@ -2334,14 +2402,11 @@ bool InterfaceToggle(Rectangle bounds, bool toggle)
             if (toggle)
             {
                 toggle = false;
-                toggleState = TOGGLE_UNACTIVE;
-                glDisable(GL_CULL_FACE);
             }
             else
             {
                 toggle = true;
                 toggleState = TOGGLE_ACTIVE;
-                glEnable(GL_CULL_FACE);
             }
         }
     }
@@ -2376,6 +2441,12 @@ bool CheckTextureExtension(char *filename)
     return (CheckFileExtension(filename, "jpg") || CheckFileExtension(filename, "png") || CheckFileExtension(filename, "tga") || CheckFileExtension(filename, "tiff") || CheckFileExtension(filename, "bmp"));
 }
 
+// Check filename for compatible mesh extensions
+bool CheckModelExtension(char *filename)
+{
+    return (CheckFileExtension(filename, "obj"));
+}
+
 //----------------------------------------------------------------------------------
 // Program
 //----------------------------------------------------------------------------------
@@ -2389,10 +2460,13 @@ int main()
 
     // Load resources
     model = LoadModel(MODEL_PATH);
+    if (model.mesh.vertexCount > 0) loadedModel = true;
     visorTarget = LoadRenderTexture(screenSize.x/4, screenSize.y/4);
     fxaa = LoadShader(FXAA_VERTEX, FXAA_FRAGMENT);
     textures[0] = LoadTexture(MODEL_TEXTURE_WINDAMOUNT);
     textures[1] = LoadTexture(MODEL_TEXTURE_DIFFUSE);
+    texPaths[0] = MODEL_TEXTURE_WINDAMOUNT;
+    texPaths[1] = MODEL_TEXTURE_DIFFUSE;
     model.material.maps[MAP_ALBEDO].texture = textures[0];
     model.material.maps[MAP_SPECULAR].texture = textures[1];
 
@@ -2450,7 +2524,8 @@ int main()
                 DrawCanvas();
                 DrawInterface();
             }
-            DrawVisor();
+            
+            if (drawVisor) DrawVisor();
 
         EndDrawing();
         //----------------------------------------------------------------------------------
@@ -2460,7 +2535,12 @@ int main()
     //--------------------------------------------------------------------------------------
     UnloadTexture(iconTex);
     UnloadRenderTexture(visorTarget);
-    UnloadModel(model);
+    if (loadedModel)
+    {
+        UnloadModel(model);
+        loadedModel = false;
+    }
+
     UnloadShader(fxaa);
     if (loadedShader) UnloadShader(shader);
     for (int i = 0; i < MAX_TEXTURES; i++) UnloadTexture(textures[i]);

@@ -205,6 +205,7 @@ extern "C" {                                    // Prevents name mangling of fun
 // Module Functions Declaration
 //------------------------------------------------------------------------------------
 FNODEDEF void InitFNode();                                                           // Initializes FNode global variables
+FNODEDEF void SetBackfaceCulling(bool state);                                        // Set backface culling state in openGL context
 FNODEDEF FNode CreateNodePI();                                                       // Creates a node which returns PI value
 FNODEDEF FNode CreateNodeE();                                                        // Creates a node which returns e value
 FNODEDEF FNode CreateNodeMatrix(Matrix mat);                                         // Creates a matrix 4x4 node (OpenGL style 4x4 - right handed, column major)
@@ -387,9 +388,16 @@ FNODEDEF void InitFNode()
     for (int i = 0; i < MAX_NODES; i++) selectedCommentNodes[i] = -1;
 
     // Initialize OpenGL states
-    glDisable(GL_CULL_FACE);
+    SetBackfaceCulling(false);
 
     TraceLogFNode(false, "initialization complete");
+}
+
+// Set backface culling state in openGL context
+FNODEDEF void SetBackfaceCulling(bool state)
+{
+    if (state) glEnable(GL_CULL_FACE);
+    else glDisable(GL_CULL_FACE);
 }
 
 // Creates a node which returns PI value
