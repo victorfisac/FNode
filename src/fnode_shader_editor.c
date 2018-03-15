@@ -1,6 +1,6 @@
 /**********************************************************************************************
 *
-*   FNode 1.0 - Node based shading library
+*   FNode 1.0 - Visual Scripting Tool To Build GLSL Shaders
 *
 *   DESCRIPTION:
 *
