@@ -1,4 +1,4 @@
-<img src="https://github.com/victorfisac/FNode/blob/master/release/res/fnode_icon.png">
+<img src="https://github.com/victorfisac/FNode/blob/master/src/icon/fnode_256x256.png">
 
 # FNode
 Tool based in nodes to build GLSL shaders without any programming knowledge written in C using OpenGL and GLFW (raylib library). It contains a compilation pipeline to convert the nodes web into a GLSL vertex and fragment shader files.

@@ -51,14 +51,15 @@
 *
 **********************************************************************************************/
 
-#ifndef FNODE_H
+#if !defined(FNODE_H)
 #define FNODE_H
 
 #define FNODE_STATIC
-#ifdef FNODE_STATIC
+
+#if defined(FNODE_STATIC)
     #define FNODEDEF static            // Functions just visible to module including this file
 #else
-    #ifdef __cplusplus
+    #if defined(__cplusplus)
         #define FNODEDEF extern "C"    // Functions visible from other files (no name mangling of functions in C++)
     #else
         #define FNODEDEF extern        // Functions visible from other files
@@ -142,19 +143,6 @@ typedef enum {
     GLSL_100
 } ShaderVersion;
 
-typedef enum {
-    BUTTON_DEFAULT,
-    BUTTON_HOVER,
-    BUTTON_PRESSED,
-    BUTTON_CLICKED
-} ButtonState;
-
-typedef enum { 
-    TOGGLE_UNACTIVE,
-    TOGGLE_PRESSED,
-    TOGGLE_ACTIVE 
-} ToggleState;
-
 //----------------------------------------------------------------------------------
 // Types and Structures Definition
 //----------------------------------------------------------------------------------
@@ -204,10 +192,20 @@ typedef struct FCommentData {
     Rectangle sizeBrShape;                  // Comment bottom-right size edit rectangle data
 } FCommentData, *FComment;
 
+#if defined(__cplusplus)
+extern "C" {                                    // Prevents name mangling of functions
+#endif
+
+//----------------------------------------------------------------------------------
+// Global Variables Definition
+//----------------------------------------------------------------------------------
+//...
+
 //------------------------------------------------------------------------------------
-// FNode Functions Declaration
+// Module Functions Declaration
 //------------------------------------------------------------------------------------
 FNODEDEF void InitFNode();                                                           // Initializes FNode global variables
+FNODEDEF void SetBackfaceCulling(bool state);                                        // Set backface culling state in openGL context
 FNODEDEF FNode CreateNodePI();                                                       // Creates a node which returns PI value
 FNODEDEF FNode CreateNodeE();                                                        // Creates a node which returns e value
 FNODEDEF FNode CreateNodeMatrix(Matrix mat);                                         // Creates a matrix 4x4 node (OpenGL style 4x4 - right handed, column major)
@@ -232,8 +230,6 @@ FNODEDEF void CalculateValues();                                                
 FNODEDEF void DrawNode(FNode node);                                                  // Draws a previously created node
 FNODEDEF void DrawNodeLine(FLine line);                                              // Draws a previously created node line
 FNODEDEF void DrawComment(FComment comment);                                         // Draws a previously created comment
-FNODEDEF bool FButton(Rectangle bounds, const char *text);                           // Button element, returns true when pressed
-FNODEDEF bool FToggle(Rectangle bounds, bool toggle);                                // Toggle Button element, returns true when active
 FNODEDEF void DestroyNode(FNode node);                                               // Destroys a node and its linked lines
 FNODEDEF void DestroyNodeLine(FLine line);                                           // Destroys a node line
 FNODEDEF void DestroyComment(FComment comment);                                      // Destroys a comment
@@ -241,6 +237,10 @@ FNODEDEF void CloseFNode();                                                     
 FNODEDEF void TraceLogFNode(bool error, const char *text, ...);                      // Outputs a trace log message
 FNODEDEF void SetLineWidth(float width);                                             // Sets GL state machine line width
 FNODEDEF int FSearch(char *filename, char *string);                                  // Returns 1 if a specific string is found in a text file
+
+#if defined(__cplusplus)
+}
+#endif
 
 #endif // FNODE_H
 
@@ -255,7 +255,7 @@ FNODEDEF int FSearch(char *filename, char *string);                             
 // Check if custom malloc/free functions defined, if not, using standard ones
 #if !defined(FNODE_MALLOC)
     #include <stdlib.h>     // Required for: malloc(), free()
-    
+
     #define     FNODE_MALLOC(size)      malloc(size)            // Memory allocation function as define
     #define     FNODE_FREE(ptr)         free(ptr)               // Memory deallocation function as define
 #endif
@@ -264,28 +264,35 @@ FNODEDEF int FSearch(char *filename, char *string);                             
 #include <string.h>             // Required for: strcat(), strstr()
 #include <math.h>               // Required for: fabs(), sqrt(), sinf(), cosf(), cos(), sin(), tan(), pow(), floor()
 #include <stdarg.h>             // Required for: va_list, va_start(), vfprintf(), va_end()
+
 #include "external/glad.h"      // Required for GLAD extensions loading library, includes OpenGL headers
 
 //----------------------------------------------------------------------------------
 // Defines and Macros
 //----------------------------------------------------------------------------------
-#define     MAX_NODES                   128                     // Max number of nodes
-#define     MAX_NODE_LENGTH             16                      // Max node output data value text length
-#define     MAX_LINES                   512                     // Max number of lines (8 lines for each node)
-#define     MAX_COMMENTS                16                      // Max number of comments
-#define     MAX_COMMENT_LENGTH          20                      // Max comment value text length
-#define     MIN_COMMENT_SIZE            75                      // Min comment width and height values
-#define     NODE_LINE_DIVISIONS         20                      // Node curved line divisions
-#define     NODE_DATA_WIDTH             30                      // Node data text width
-#define     NODE_DATA_HEIGHT            30                      // Node data text height
-#define     UI_GRID_SPACING             25                      // Interface canvas background grid divisions length
-#define     UI_GRID_COUNT               100                     // Interface canvas background grid divisions count
-#define     UI_COMMENT_WIDTH            220                     // Interface comment text box width
-#define     UI_COMMENT_HEIGHT           25                      // Interface comment text box height
-#define     UI_BUTTON_DEFAULT_COLOR     LIGHTGRAY               // Interface button background color
-#define     UI_BORDER_DEFAULT_COLOR     125                     // Interface button border color
-#define     UI_TOGGLE_TEXT_PADDING      20                      // Interface toggle text padding
-#define     UI_TOGGLE_BORDER_WIDTH      2                       // Interface toogle border width
+#define     MAX_NODES                       128                     // Max number of nodes
+#define     MAX_NODE_LENGTH                 16                      // Max node output data value text length
+#define     MAX_LINES                       512                     // Max number of lines (8 lines for each node)
+#define     MAX_COMMENTS                    16                      // Max number of comments
+#define     MAX_COMMENT_LENGTH              20                      // Max comment value text length
+#define     MIN_COMMENT_SIZE                75                      // Min comment width and height values
+#define     NODE_LINE_DIVISIONS             20                      // Node curved line divisions
+#define     NODE_DATA_WIDTH                 30                      // Node data text width
+#define     NODE_DATA_HEIGHT                30                      // Node data text height
+#define     UI_GRID_SPACING                 25                      // Interface canvas background grid divisions length
+#define     UI_GRID_COUNT                   100                     // Interface canvas background grid divisions count
+#define     UI_COMMENT_WIDTH                220                     // Interface comment text box width
+#define     UI_COMMENT_HEIGHT               25                      // Interface comment text box height
+#define     UI_BUTTON_DEFAULT_COLOR         LIGHTGRAY               // Interface button background color
+#define     UI_BORDER_DEFAULT_COLOR         125                     // Interface button border color
+#define     UI_TOGGLE_TEXT_PADDING          20                      // Interface toggle text padding
+#define     UI_TOGGLE_BORDER_WIDTH          2                       // Interface toogle border width
+
+#define     COLOR_INPUT_DISABLED_SHAPE      (Color){ 255, 151, 163, 255 }
+#define     COLOR_INPUT_DISABLED_BORDER     (Color){ 199, 4, 10, 255 }
+#define     COLOR_INPUT_ENABLED_SHAPE       (Color){ 151, 232, 255, 255 }
+#define     COLOR_INPUT_ENABLED_BORDER      (Color){ 4, 140, 199, 255 }
+#define     COLOR_INPUT_ADDITIVE            (Color){ 255, 255, 255, 40 }
 
 //----------------------------------------------------------------------------------
 // Types and Structures Definition
@@ -320,7 +327,7 @@ int selectedCommentNodes[MAX_NODES];        // Current selected comment nodes id
 int selectedCommentNodesCount;              // Current selected comment nodes ids list count
 FComment tempComment = NULL;                // Temporally created comment during comment states
 Vector2 tempCommentPos = { 0, 0 };          // Temporally created comment start position
-Vector2 screenSize = { 1280, 720 };         // Window screen width
+Vector2 screenSize = { 1280, 800 };         // Window screen width
 Camera2D camera;                            // Node area 2d camera for panning
 Camera camera3d;                            // Visor camera 3d for model and shader visualization
 bool debugMode = false;                     // Drawing debug information state
@@ -328,7 +335,7 @@ int menuOffset = 0;                         // Interface elements position curre
 bool interact = true;                       // Buttons and text can interact state
 
 //------------------------------------------------------------------------------------
-// Module specific Functions Declaration
+// Module Internal Functions Declaration
 //------------------------------------------------------------------------------------
 static float FVector2Length(Vector2 v);                                    // Returns length of a Vector2
 static float FVector3Length(Vector3 v);                                    // Returns length of a Vector3
@@ -375,7 +382,7 @@ static void FStringToFloat(float *pointer, const char *string);            // Se
 static void FFloatToString(char *buffer, float value);                     // Sends formatted output to an initialized string pointer
 
 //------------------------------------------------------------------------------------
-// Functions Definition
+// Module Functions Definition
 //------------------------------------------------------------------------------------
 // Initializes FNode global variables
 FNODEDEF void InitFNode()
@@ -387,9 +394,16 @@ FNODEDEF void InitFNode()
     for (int i = 0; i < MAX_NODES; i++) selectedCommentNodes[i] = -1;
 
     // Initialize OpenGL states
-    glDisable(GL_CULL_FACE);
+    SetBackfaceCulling(false);
 
     TraceLogFNode(false, "initialization complete");
+}
+
+// Set backface culling state in openGL context
+FNODEDEF void SetBackfaceCulling(bool state)
+{
+    if (state) glEnable(GL_CULL_FACE);
+    else glDisable(GL_CULL_FACE);
 }
 
 // Creates a node which returns PI value
@@ -455,7 +469,7 @@ FNODEDEF FNode CreateNodeMatrix(Matrix mat)
     newNode->inputsLimit = 0;
 
     UpdateNodeShapes(newNode);
-    
+
     return newNode;
 }
 
@@ -862,6 +876,7 @@ FNODEDEF void UpdateNodeShapes(FNode node)
         }
 
         node->shape.width = 10 + NODE_DATA_WIDTH;
+
         if (index != -1) node->shape.width += MeasureText(node->output.data[index].valueText, 20);
         else if (node->output.dataCount > 0)
         {
@@ -1270,7 +1285,7 @@ FNODEDEF void CalculateValues()
                                 int indexA = GetNodeIndex(nodes[i]->inputs[0]);
                                 int indexB = GetNodeIndex(nodes[i]->inputs[1]);
                                 int indexC = GetNodeIndex(nodes[i]->inputs[2]);
-                                
+
                                 switch (nodes[i]->output.dataCount)
                                 {
                                     case 1:
@@ -1282,7 +1297,7 @@ FNODEDEF void CalculateValues()
                                         Vector2 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value };
                                         Vector2 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value };
                                         Vector2 lerp = FVector2Lerp(vectorA, vectorB, nodes[indexC]->output.data[0].value);
-                                        
+
                                         nodes[i]->output.dataCount = 2;
                                         nodes[i]->output.data[0].value = lerp.x;
                                         nodes[i]->output.data[1].value = lerp.y;
@@ -1292,7 +1307,7 @@ FNODEDEF void CalculateValues()
                                         Vector3 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value, nodes[indexA]->output.data[2].value };
                                         Vector3 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value, nodes[indexA]->output.data[2].value };
                                         Vector3 lerp = FVector3Lerp(vectorA, vectorB, nodes[indexC]->output.data[0].value);
-                                        
+
                                         nodes[i]->output.dataCount = 3;
                                         nodes[i]->output.data[0].value = lerp.x;
                                         nodes[i]->output.data[1].value = lerp.y;
@@ -1303,7 +1318,7 @@ FNODEDEF void CalculateValues()
                                         Vector4 vectorA = { nodes[indexA]->output.data[0].value, nodes[indexA]->output.data[1].value, nodes[indexA]->output.data[2].value, nodes[indexA]->output.data[3].value };
                                         Vector4 vectorB = { nodes[indexB]->output.data[0].value, nodes[indexB]->output.data[1].value, nodes[indexA]->output.data[2].value, nodes[indexA]->output.data[3].value };
                                         Vector4 lerp = FVector4Lerp(vectorA, vectorB, nodes[indexC]->output.data[0].value);
-                                        
+
                                         nodes[i]->output.dataCount = 4;
                                         nodes[i]->output.data[0].value = lerp.x;
                                         nodes[i]->output.data[1].value = lerp.y;
@@ -1720,6 +1735,7 @@ FNODEDEF void DrawNode(FNode node)
     {
         if (node->property) DrawRectangleRec(node->shape, ((node->id == selectedNode) ? (Color){ 128, 204, 139, 255 } : (Color){ 173, 225, 181, 255 }));
         else DrawRectangleRec(node->shape, ((node->id == selectedNode) ? GRAY : LIGHTGRAY));
+
         DrawRectangleLines(node->shape.x, node->shape.y, node->shape.width, node->shape.height, BLACK);
         DrawText(FormatText("%s [ID: %i]", node->name, node->id), node->shape.x + node->shape.width/2 - MeasureText(node->name, 10)/2, node->shape.y - 15, 10, BLACK);
 
@@ -1804,9 +1820,19 @@ FNODEDEF void DrawNode(FNode node)
 
         if (node->inputShape.width > 0)
         {
-            if (node->inputsCount > 0) DrawRectangleRec(node->inputShape, ((CheckCollisionPointRec(GetMousePosition(), CameraToViewRec(node->inputShape, camera)) ? LIGHTGRAY : GRAY)));
-            else DrawRectangleRec(node->inputShape, ((CheckCollisionPointRec(GetMousePosition(), CameraToViewRec(node->inputShape, camera)) ? LIGHTGRAY : RED)));
-            DrawRectangleLines(node->inputShape.x, node->inputShape.y, node->inputShape.width, node->inputShape.height, BLACK);
+            if (node->inputsCount > 0)
+            {
+                DrawRectangleRec(node->inputShape, COLOR_INPUT_ENABLED_SHAPE);
+                DrawRectangleLines(node->inputShape.x, node->inputShape.y, node->inputShape.width, node->inputShape.height, COLOR_INPUT_ENABLED_BORDER);
+            }
+            else
+            {
+                DrawRectangleRec(node->inputShape, COLOR_INPUT_DISABLED_SHAPE);
+                DrawRectangleLines(node->inputShape.x, node->inputShape.y, node->inputShape.width, node->inputShape.height, COLOR_INPUT_DISABLED_BORDER);
+            }
+            
+            if(CheckCollisionPointRec(GetMousePosition(), CameraToViewRec(node->inputShape, camera)))
+                DrawRectangleRec(node->inputShape, COLOR_INPUT_ADDITIVE);
         }
 
         if (node->outputShape.width > 0)
@@ -1880,25 +1906,26 @@ FNODEDEF void DrawNodeLine(FLine line)
             float radius = (fabs(to.y - from.y)/4 + 0.02f)*multiplier;
             float distance = FClamp(fabs(to.x - from.x)/100, 0.0f, 1.0f);
 
-            DrawLine(from.x, from.y, from.x, from.y, BLACK);
+            DrawLine(from.x, from.y, from.x, from.y, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
 
             while (angle < 90)
             {
-                DrawLine(from.x + FCos(angle*DEG2RAD)*radius*multiplier*distance, from.y + radius + FSin(angle*DEG2RAD)*radius, from.x + FCos((angle + 10)*DEG2RAD)*radius*multiplier*distance, from.y + radius + FSin((angle + 10)*DEG2RAD)*radius, BLACK);
+                DrawLine(from.x + FCos(angle*DEG2RAD)*radius*multiplier*distance, from.y + radius + FSin(angle*DEG2RAD)*radius, from.x + FCos((angle + 10)*DEG2RAD)*radius*multiplier*distance, from.y + radius + FSin((angle + 10)*DEG2RAD)*radius, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
                 angle += 10;
             }
+
             Vector2 lastPosition = { from.x, from.y + radius*2 };
-            DrawLine(lastPosition.x, lastPosition.y, to.x + FCos(270*DEG2RAD)*radius*multiplier, to.y - radius + FSin(270*DEG2RAD)*radius, BLACK);
+            DrawLine(lastPosition.x, lastPosition.y, to.x + FCos(270*DEG2RAD)*radius*multiplier, to.y - radius + FSin(270*DEG2RAD)*radius, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
             lastPosition.x = to.x;
 
             while (angle < 270)
             {
-                DrawLine(to.x + FCos(angle*DEG2RAD)*radius*multiplier*distance, to.y - radius + FSin(angle*DEG2RAD)*radius, to.x + FCos((angle + 10)*DEG2RAD)*radius*multiplier*distance, to.y - radius + FSin((angle + 10)*DEG2RAD)*radius, BLACK);
+                DrawLine(to.x + FCos(angle*DEG2RAD)*radius*multiplier*distance, to.y - radius + FSin(angle*DEG2RAD)*radius, to.x + FCos((angle + 10)*DEG2RAD)*radius*multiplier*distance, to.y - radius + FSin((angle + 10)*DEG2RAD)*radius, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
                 angle += 10;
             }
 
             lastPosition.y = lastPosition.y + radius*2;
-            DrawLine(to.x, to.y, to.x, to.y, BLACK);
+            DrawLine(to.x, to.y, to.x, to.y, ((tempLine->id == line->id && tempLine->to == -1) ? DARKGRAY : BLACK));
         }
 
         if (indexFrom != -1 && indexTo != -1)
@@ -1960,6 +1987,7 @@ FNODEDEF void DrawComment(FComment comment)
     if (comment != NULL)
     {
         if ((commentState == 0) || ((commentState == 1) && (tempComment->id != comment->id)) || ((commentState == 1) && editSize != -1)) DrawRectangleRec(comment->shape, Fade(YELLOW, 0.2f));
+
         DrawRectangleLines(comment->shape.x, comment->shape.y, comment->shape.width, comment->shape.height, BLACK);
 
         if ((commentState == 0) || ((commentState == 1) && (tempComment->id != comment->id)) || ((commentState == 1) && editSize != -1))
@@ -2034,107 +2062,6 @@ FNODEDEF void DrawComment(FComment comment)
     else TraceLogFNode(true, "error trying to draw a null referenced line");
 }
 
-// Button element, returns true when pressed
-FNODEDEF bool FButton(Rectangle bounds, const char *text)
-{
-    ButtonState buttonState = BUTTON_DEFAULT;
-
-    if (bounds.width < (MeasureText(text, 10) + 20)) bounds.width = MeasureText(text, 10) + 20;
-    if (bounds.height < 10) bounds.height = 10 + 40;
-
-    bool canInteract = interact;
-    if ((strcmp(text, "Close") == 0) || (strcmp(text, "<") == 0) || (strcmp(text, ">") == 0)) canInteract = true;
-
-    if (CheckCollisionPointRec(GetMousePosition(), bounds) && canInteract)
-    {
-        if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) buttonState = BUTTON_PRESSED;
-        else if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) buttonState = BUTTON_CLICKED;
-        else buttonState = BUTTON_HOVER;
-    }
-
-    switch (buttonState)
-    {
-        case BUTTON_DEFAULT:
-        {
-            DrawRectangleRec(bounds, (Color){ UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, 255 });
-            DrawRectangle(bounds.x + 2, bounds.y + 2, bounds.width - 4,bounds.height - 4, UI_BUTTON_DEFAULT_COLOR);
-            DrawText(text, bounds.x + ((bounds.width/2) - (MeasureText(text, 10)/2)), bounds.y + (bounds.height - 10)/2, 10, DARKGRAY);
-        } break;
-        case BUTTON_HOVER:
-        {
-            DrawRectangleRec(bounds, (Color){ UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, 255 });
-            DrawRectangle(bounds.x + 2, bounds.y + 2, bounds.width - 4,bounds.height - 4, UI_BUTTON_DEFAULT_COLOR);
-            DrawRectangleRec(bounds, Fade(WHITE, 0.4f));
-            DrawText(text, bounds.x + ((bounds.width/2) - (MeasureText(text, 10)/2)), bounds.y + (bounds.height - 10)/2, 10, BLACK);
-        } break;
-        case BUTTON_PRESSED:
-        {
-            DrawRectangleRec(bounds, UI_BUTTON_DEFAULT_COLOR);
-            DrawRectangle(bounds.x + 2, bounds.y + 2, bounds.width - 4,bounds.height - 4, GRAY);
-            DrawText(text, bounds.x + ((bounds.width/2) - (MeasureText(text, 10)/2)), bounds.y + (bounds.height - 10)/2, 10, LIGHTGRAY);
-        } break;
-        default: break;
-    }
-
-    menuOffset++;
-
-    return (buttonState == BUTTON_CLICKED);
-}
-
-// Toggle Button element, returns true when active
-FNODEDEF bool FToggle(Rectangle bounds, bool toggle)
-{
-    ToggleState toggleState = TOGGLE_UNACTIVE;
-    Rectangle toggleButton = bounds;
-    Vector2 mousePoint = GetMousePosition();
-    
-    if (toggle) toggleState = TOGGLE_ACTIVE;
-    else toggleState = TOGGLE_UNACTIVE;
-    
-    if (CheckCollisionPointRec(mousePoint, toggleButton))
-    {
-        if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) toggleState = TOGGLE_PRESSED;
-        else if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON))
-        {
-            if (toggle)
-            {
-                toggle = false;
-                toggleState = TOGGLE_UNACTIVE;
-                glDisable(GL_CULL_FACE);
-            }
-            else
-            {
-                toggle = true;
-                toggleState = TOGGLE_ACTIVE;
-                glEnable(GL_CULL_FACE);
-            }
-        }
-    }
-
-    switch (toggleState)
-    {
-        case TOGGLE_UNACTIVE:
-        {
-            DrawRectangleRec(toggleButton, (Color){ UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, 255 });
-            DrawRectangle((toggleButton.x + UI_TOGGLE_BORDER_WIDTH), (toggleButton.y + UI_TOGGLE_BORDER_WIDTH) , (toggleButton.width - (2*UI_TOGGLE_BORDER_WIDTH)), (toggleButton.height - (2*UI_TOGGLE_BORDER_WIDTH)), RAYWHITE);
-        } break;
-        case TOGGLE_PRESSED:
-        {
-            DrawRectangleRec(toggleButton, (Color){ UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, 255 });
-            DrawRectangle((toggleButton.x + UI_TOGGLE_BORDER_WIDTH), (toggleButton.y + UI_TOGGLE_BORDER_WIDTH) , (toggleButton.width - (2*UI_TOGGLE_BORDER_WIDTH)), (toggleButton.height - (2*UI_TOGGLE_BORDER_WIDTH)), DARKGRAY);
-        } break;
-        case TOGGLE_ACTIVE:
-        {
-            DrawRectangleRec(toggleButton, (Color){ UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, UI_BORDER_DEFAULT_COLOR, 255 });
-            DrawRectangle((toggleButton.x + UI_TOGGLE_BORDER_WIDTH), (toggleButton.y + UI_TOGGLE_BORDER_WIDTH) , (toggleButton.width - (2*UI_TOGGLE_BORDER_WIDTH)), (toggleButton.height - (2*UI_TOGGLE_BORDER_WIDTH)), RAYWHITE);
-            DrawRectangle((toggleButton.x + UI_TOGGLE_BORDER_WIDTH*2), (toggleButton.y + UI_TOGGLE_BORDER_WIDTH*2) , (toggleButton.width - (4*UI_TOGGLE_BORDER_WIDTH)), (toggleButton.height - (4*UI_TOGGLE_BORDER_WIDTH)), DARKGRAY);
-        } break;
-        default: break;
-    }
-
-    return toggle;
-}
-
 // Destroys a node and its linked lines
 FNODEDEF void DestroyNode(FNode node)
 {
@@ -2193,7 +2120,7 @@ FNODEDEF void DestroyNodeLine(FLine line)
             FNODE_FREE(lines[index]);
             usedMemory -= sizeof(FLineData);
             lines[index] = NULL;
-            
+
             for (int i = index; i < linesCount; i++)
             {
                 if ((i + 1) < linesCount) lines[i] = lines[i + 1];
@@ -2230,18 +2157,18 @@ FNODEDEF void DestroyComment(FComment comment)
             FNODE_FREE(comments[index]->value);
             usedMemory -= MAX_COMMENT_LENGTH;
             comments[index]->value = NULL;
-            
+
             FNODE_FREE(comments[index]);
             usedMemory -= sizeof(FCommentData);
             comments[index] = NULL;
-            
+
             for (int i = index; i < commentsCount; i++)
             {
                 if ((i + 1) < commentsCount) comments[i] = comments[i + 1];
             }
 
             commentsCount--;
-            
+
             TraceLogFNode(false, "destroyed comment id %i (index: %i) [USED RAM: %i bytes]", id, index, usedMemory);
         }
         else TraceLogFNode(true, "error when trying to destroy comment id %i due to index is out of bounds %i", id, index);
@@ -2271,7 +2198,7 @@ FNODEDEF void CloseFNode()
             nodes[i] = NULL;
         }
     }
-    
+
     for (int i = 0; i < linesCount; i++)
     {
         if (lines[i] != NULL)
@@ -2307,6 +2234,7 @@ FNODEDEF void CloseFNode()
     linesCount = 0;
     commentsCount = 0;
     selectedCommentNodesCount = 0;
+
     for (int i = 0; i < MAX_NODES; i++) selectedCommentNodes[i] = -1;
 
     TraceLogFNode(false, "unitialization complete [USED RAM: %i bytes]", usedMemory);
@@ -2360,7 +2288,7 @@ FNODEDEF int FSearch(char *filename, char *string)
 }
 
 //----------------------------------------------------------------------------------
-// Module specific Functions Definition
+// Module Internal Functions Definition
 //----------------------------------------------------------------------------------
 // Returns length of a Vector2
 static float FVector2Length(Vector2 v)
