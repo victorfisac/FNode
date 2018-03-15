@@ -25,3 +25,4 @@ _Note: the output shader is tweaked to work with raylib videogames programming l
 Credits
 ------
 Víctor Fisac - www.victorfisac.com
+Very thanks to [raysan5](https://www.github.com/raysan5) for creating a improved interface mock-up
