@@ -270,23 +270,29 @@ FNODEDEF int FSearch(char *filename, char *string);                             
 //----------------------------------------------------------------------------------
 // Defines and Macros
 //----------------------------------------------------------------------------------
-#define     MAX_NODES                   128                     // Max number of nodes
-#define     MAX_NODE_LENGTH             16                      // Max node output data value text length
-#define     MAX_LINES                   512                     // Max number of lines (8 lines for each node)
-#define     MAX_COMMENTS                16                      // Max number of comments
-#define     MAX_COMMENT_LENGTH          20                      // Max comment value text length
-#define     MIN_COMMENT_SIZE            75                      // Min comment width and height values
-#define     NODE_LINE_DIVISIONS         20                      // Node curved line divisions
-#define     NODE_DATA_WIDTH             30                      // Node data text width
-#define     NODE_DATA_HEIGHT            30                      // Node data text height
-#define     UI_GRID_SPACING             25                      // Interface canvas background grid divisions length
-#define     UI_GRID_COUNT               100                     // Interface canvas background grid divisions count
-#define     UI_COMMENT_WIDTH            220                     // Interface comment text box width
-#define     UI_COMMENT_HEIGHT           25                      // Interface comment text box height
-#define     UI_BUTTON_DEFAULT_COLOR     LIGHTGRAY               // Interface button background color
-#define     UI_BORDER_DEFAULT_COLOR     125                     // Interface button border color
-#define     UI_TOGGLE_TEXT_PADDING      20                      // Interface toggle text padding
-#define     UI_TOGGLE_BORDER_WIDTH      2                       // Interface toogle border width
+#define     MAX_NODES                       128                     // Max number of nodes
+#define     MAX_NODE_LENGTH                 16                      // Max node output data value text length
+#define     MAX_LINES                       512                     // Max number of lines (8 lines for each node)
+#define     MAX_COMMENTS                    16                      // Max number of comments
+#define     MAX_COMMENT_LENGTH              20                      // Max comment value text length
+#define     MIN_COMMENT_SIZE                75                      // Min comment width and height values
+#define     NODE_LINE_DIVISIONS             20                      // Node curved line divisions
+#define     NODE_DATA_WIDTH                 30                      // Node data text width
+#define     NODE_DATA_HEIGHT                30                      // Node data text height
+#define     UI_GRID_SPACING                 25                      // Interface canvas background grid divisions length
+#define     UI_GRID_COUNT                   100                     // Interface canvas background grid divisions count
+#define     UI_COMMENT_WIDTH                220                     // Interface comment text box width
+#define     UI_COMMENT_HEIGHT               25                      // Interface comment text box height
+#define     UI_BUTTON_DEFAULT_COLOR         LIGHTGRAY               // Interface button background color
+#define     UI_BORDER_DEFAULT_COLOR         125                     // Interface button border color
+#define     UI_TOGGLE_TEXT_PADDING          20                      // Interface toggle text padding
+#define     UI_TOGGLE_BORDER_WIDTH          2                       // Interface toogle border width
+
+#define     COLOR_INPUT_DISABLED_SHAPE      (Color){ 255, 151, 163, 255 }
+#define     COLOR_INPUT_DISABLED_BORDER     (Color){ 199, 4, 10, 255 }
+#define     COLOR_INPUT_ENABLED_SHAPE       (Color){ 151, 232, 255, 255 }
+#define     COLOR_INPUT_ENABLED_BORDER      (Color){ 4, 140, 199, 255 }
+#define     COLOR_INPUT_ADDITIVE            (Color){ 255, 255, 255, 40 }
 
 //----------------------------------------------------------------------------------
 // Types and Structures Definition
@@ -1816,19 +1822,17 @@ FNODEDEF void DrawNode(FNode node)
         {
             if (node->inputsCount > 0)
             {
-                DrawRectangleRec(node->inputShape, (Color){ 151, 232, 255, 255 });
-                DrawRectangleLines(node->inputShape.x, node->inputShape.y, node->inputShape.width, node->inputShape.height, (Color){ 4, 140, 199, 255 });
+                DrawRectangleRec(node->inputShape, COLOR_INPUT_ENABLED_SHAPE);
+                DrawRectangleLines(node->inputShape.x, node->inputShape.y, node->inputShape.width, node->inputShape.height, COLOR_INPUT_ENABLED_BORDER);
             }
             else
             {
-                DrawRectangleRec(node->inputShape, RED);
-                DrawRectangleLines(node->inputShape.x, node->inputShape.y, node->inputShape.width, node->inputShape.height, BLACK);
+                DrawRectangleRec(node->inputShape, COLOR_INPUT_DISABLED_SHAPE);
+                DrawRectangleLines(node->inputShape.x, node->inputShape.y, node->inputShape.width, node->inputShape.height, COLOR_INPUT_DISABLED_BORDER);
             }
             
             if(CheckCollisionPointRec(GetMousePosition(), CameraToViewRec(node->inputShape, camera)))
-                DrawRectangleRec(node->inputShape, (Color){ 255, 255, 255, 40 });
-
-            
+                DrawRectangleRec(node->inputShape, COLOR_INPUT_ADDITIVE);
         }
 
         if (node->outputShape.width > 0)
