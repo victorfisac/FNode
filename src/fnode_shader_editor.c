@@ -2584,7 +2584,7 @@ int main()
     // Initialization
     //--------------------------------------------------------------------------------------
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
-    InitWindow(screenSize.x, screenSize.y, "FNode - Visual scripting shader editor");
+    InitWindow(screenSize.x, screenSize.y, "FNode - Visual Scripting Tool To Build GLSL Shaders");
     iconTex = LoadTexture(WINDOW_ICON);
 
     // Load resources
