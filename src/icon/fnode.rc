@@ -9,12 +9,12 @@ BEGIN
     BLOCK "040904E4"
     BEGIN
       VALUE "CompanyName", "Victor Fisac Fuentes"
-      VALUE "FileDescription", "FNode - Visual scripting tool to build GLSL shaders"
+      VALUE "FileDescription", "FNode - Visual Sscripting Tool To Build GLSL Shaders"
       VALUE "FileVersion", "1.0"
       VALUE "InternalName", "fnode"
       VALUE "LegalCopyright", "(c) 2017 Victor Fisac. All rights reserved."
       VALUE "OriginalFilename", "fnode_shader_editor.exe"
-      VALUE "ProductName", "FNode app"
+      VALUE "ProductName", "FNode"
       VALUE "ProductVersion", "1.0"
     END
   END
