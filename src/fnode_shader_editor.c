@@ -75,6 +75,7 @@
 #define     EXAMPLE_FRAGMENT_PATH       "res/example/output/shader.fs"              // Fragment shader output path of start example
 #define     EXAMPLE_DATA_PATH           "res/example/output/shader.fnode"           // Shader data output path of start example
 #define     MAX_TEXTURES                8                                           // Shader maximum OpenGL texture units
+#define     DEFAULT_PROJECT_TEXTURES    2                                           // Textures to load when loading default project
 #define     COMPILE_DURATION            120                                         // Shader compile result duration
 #define     MODEL_PATH                  "res/example/meshes/plant.obj"              // Example model file path
 #define     MODEL_TEXTURE_DIFFUSE       "res/example/textures/plant_color.png"      // Example model color texture file path
@@ -210,10 +211,10 @@ void DrawCanvasGrid(int divisions);                             // Draw canvas g
 void DrawVisor(void);                                           // Draws a visor with default model rotating and current shader
 void DrawInterface(void);                                       // Draw interface to create nodes
 void DrawHelp(void);                                            // Draw help section with controls information or shortcut message
-void DrawLeftSection(const char *sectionName, Rectangle *rectangle, float topPadding, float topPaddingScale, float buttonsCount, float heightPadding);  // Draw left section rectangle with title and specified paddings
-void DrawRightSection(const char *sectionName, Rectangle *rectangle, float topPadding, float topPaddingScale, float buttonsCount, float heightPadding);  // Draw right section rectangle with title and specified paddings
-void ApplySectionPadding(Rectangle *rectangle);                 // Applies left-top padding to given rectangle
-void DrawTexturesPanel(Rectangle sectionRect);                  // Draw textures content given a section area to drag and drop resources files
+void DrawLeftSection(const char *name, Rectangle *rect, Vector4 paddings);     // Draw left section rectangle with title and specified paddings
+void DrawRightSection(const char *name, Rectangle *rect, Vector4 paddings);    // Draw right section rectangle with title and specified paddings
+void ApplySectionPadding(Rectangle *rect);                      // Applies left-top padding to given rectangle
+void DrawTexturesPanel(Rectangle rect);                         // Draw textures content given a section area to drag and drop resources files
 void DrawScrollbar(void);                                       // Draw right interface scroll rectangle and handle
 bool InterfaceButtonGroup(Rectangle bounds, const char *text, bool enabled);    // Button group element, returns true when pressed
 bool InterfaceButton(Rectangle bounds, const char *text);       // Button element, returns true when pressed
@@ -381,6 +382,19 @@ void LoadDefaultProject(void)
     Shader previousShader = LoadShader(EXAMPLE_VERTEX_PATH, EXAMPLE_FRAGMENT_PATH);
     if (previousShader.id > 0)
     {
+        textures[0] = LoadTexture(MODEL_TEXTURE_WINDAMOUNT);
+        textures[1] = LoadTexture(MODEL_TEXTURE_DIFFUSE);
+
+        for (int i = 0; i < DEFAULT_PROJECT_TEXTURES; i++)
+        {
+            if (textures[i].id > 0)
+            {
+                SetTextureFilter(textures[i], FILTER_BILINEAR);
+                texPaths[i] = MODEL_TEXTURE_WINDAMOUNT;
+                model.material.maps[i].texture = textures[i];
+            }
+        }
+
         shader = previousShader;
         model.material.shader = shader;
         viewUniform = GetShaderLocation(shader, "viewDirection");
@@ -1229,7 +1243,11 @@ void UpdateShaderData(void)
                 textures[index] = LoadTexture(droppedFiles[0]);
                 texPaths[index] = droppedFiles[0];
 
-                if (shader.id > 0) model.material.maps[index].texture = textures[index];
+                if (shader.id > 0)
+                {
+                    model.material.maps[index].texture = textures[index];
+                    SetTextureFilter(textures[index], FILTER_BILINEAR);
+                }
 
                 loadedFiles++;
                 if (loadedFiles == MAX_TEXTURES) loadedFiles = 0;
@@ -2139,16 +2157,16 @@ void DrawInterface(void)
     DrawRectangle(screenSize.x - canvasSize.x, 0, WIDTH_INTERFACE_BORDER, sidebarRect.height, COLOR_INTERFACE_BORDER);
 
     Rectangle layoutRect = (Rectangle){ 0, 0, 0, 0 };
-    DrawLeftSection("Tools", &layoutRect, 0, 0.75f, 3, 1.2f);
+    DrawLeftSection("Tools", &layoutRect, (Vector4){ 0, 0.75f, 3, 1.2f });
     if (InterfaceButton(LEFT_LAYOUT_RECT, "Align Nodes")) AlignAllNodes();
     if (InterfaceButton(LEFT_LAYOUT_RECT, "Clear Graph")) ClearGraph();
     if (InterfaceButton(LEFT_LAYOUT_RECT, "Clear Unused")) ClearUnusedNodes();
 
-    DrawLeftSection("Compilation", &layoutRect, 4, 1.25f, 2, 1);
+    DrawLeftSection("Compilation", &layoutRect, (Vector4){ 4, 1.25f, 2, 1 });
     if (InterfaceButtonGroup(LEFT_LAYOUT_RECT, "Compile", (compileState >= 0))) CompileShader();
     if (InterfaceButton(LEFT_LAYOUT_RECT, "Save Changes")) SaveChanges();
 
-    DrawLeftSection("Configuration", &layoutRect, 7, 1.5f, 3, 0.05f);
+    DrawLeftSection("Configuration", &layoutRect, (Vector4){ 7, 1.5f, 3, 0.05f });
     if (InterfaceButtonGroup((Rectangle){ layoutRect.x, layoutRect.y, layoutRect.width/2 - PADDING_MAIN_CENTER, UI_BUTTON_HEIGHT*0.75f }, "GLSL 330", (version == 0))) version = 0;
     if (InterfaceButtonGroup((Rectangle){ layoutRect.x + (layoutRect.width/2*menuOffset), layoutRect.y, layoutRect.width/2 - PADDING_MAIN_CENTER, UI_BUTTON_HEIGHT*0.75f }, "GLSL 110", (version == 1))) version = 1;
 
@@ -2160,7 +2178,7 @@ void DrawInterface(void)
     drawVisor = InterfaceToggle((Rectangle){ layoutRect.x, layoutRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER)*1.75f, 16, 16 }, drawVisor);
     DrawText("Draw preview", layoutRect.x + PADDING_MAIN_LEFT*3, layoutRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER)*1.75f + 3, 10, COLOR_SECTION_TITLE);
 
-    DrawLeftSection("Resources", &layoutRect, 11, 0.8f, 12, 1.65f);
+    DrawLeftSection("Resources", &layoutRect, (Vector4){ 11, 0.8f, 12, 1.65f });
     DrawRectangle(layoutRect.x, layoutRect.y, layoutRect.width, UI_BUTTON_HEIGHT, COLOR_BUTTON_BORDER);
     DrawRectangle(layoutRect.x + WIDTH_INTERFACE_BORDER, layoutRect.y + WIDTH_INTERFACE_BORDER, layoutRect.width - WIDTH_INTERFACE_BORDER*2, UI_BUTTON_HEIGHT - WIDTH_INTERFACE_BORDER*2, COLOR_BUTTON_SHAPE);
 
@@ -2177,7 +2195,11 @@ void DrawInterface(void)
 
             for (int i = 0; i < MAX_TEXTURES; i++)
             {
-                if (texPaths[i] != NULL) textures[i] = LoadTexture(texPaths[i]);
+                if (texPaths[i] != NULL)
+                {
+                    textures[i] = LoadTexture(texPaths[i]);
+                    SetTextureFilter(textures[i], FILTER_BILINEAR);
+                }
             }
         }
     }
@@ -2186,26 +2208,26 @@ void DrawInterface(void)
     layoutRect.y += PADDING_MAIN_TOP*2.0f;
     DrawTexturesPanel(layoutRect);
 
-    DrawLeftSection("Credits", &layoutRect, 24, 1.7f, 1, 0.25f);
+    DrawLeftSection("Credits", &layoutRect, (Vector4){ 24, 1.7f, 1, 0.25f });
     DrawText("Victor Fisac [victorfisac.com]", layoutRect.x + PADDING_MAIN_LEFT*0.5f, layoutRect.y + 5, 10, COLOR_SECTION_TITLE);
 
     // Draw interface background
     DrawRectangleRec(interfaceRect, COLOR_INTERFACE_SHAPE);
     DrawRectangle(interfaceRect.x - WIDTH_INTERFACE_BORDER*2, interfaceRect.y, WIDTH_INTERFACE_BORDER, interfaceRect.height, COLOR_INTERFACE_BORDER);
 
-    DrawRightSection("Constant Properties", &layoutRect, 0, 0.75f, 5, 1.6f);
+    DrawRightSection("Constant Properties", &layoutRect, (Vector4){ 0, 0.75f, 5, 1.6f });
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Value")) CreateNodeValue((float)GetRandomValue(-11, 10));
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Vector 2")) CreateNodeVector2((Vector2){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Vector 3")) CreateNodeVector3((Vector3){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Vector 4")) CreateNodeVector4((Vector4){ (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10), (float)GetRandomValue(0, 10) });
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Matrix 4x4")) CreateNodeMatrix(FMatrixIdentity());
 
-    DrawRightSection("Properties", &layoutRect, 6, 1.75f, 3, 1.25f);
+    DrawRightSection("Properties", &layoutRect, (Vector4){ 6, 1.75f, 3, 1.25f });
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Value")) CreateNodeProperty(FNODE_VALUE, "Value", 1, 0);
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Color")) CreateNodeProperty(FNODE_VECTOR4, "Color", 4, 0);
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Sampler2D")) CreateNodeProperty(FNODE_SAMPLER2D, "Sampler 2D", 4, 2);
 
-    DrawRightSection("Arithmetic", &layoutRect, 11, 0.85f, 24, 2);
+    DrawRightSection("Arithmetic", &layoutRect, (Vector4){ 11, 0.85f, 24, 2 });
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Add")) CreateNodeOperator(FNODE_ADD, "Add", MAX_INPUTS);
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Subtract")) CreateNodeOperator(FNODE_SUBTRACT, "Subtract", MAX_INPUTS);
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Multiply")) CreateNodeOperator(FNODE_MULTIPLY, "Multiply", MAX_INPUTS);
@@ -2229,7 +2251,7 @@ void DrawInterface(void)
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Step")) CreateNodeOperator(FNODE_STEP, "Step", 2);
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "SmoothStep")) CreateNodeOperator(FNODE_SMOOTHSTEP, "SmoothStep", 3);
 
-    DrawRightSection("Vector Operations", &layoutRect, 37, 0.75f, 12, 1.35f);
+    DrawRightSection("Vector Operations", &layoutRect, (Vector4){ 37, 0.75f, 12, 1.35f});
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Append")) CreateNodeOperator(FNODE_APPEND, "Append", 4);
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Normalize")) CreateNodeOperator(FNODE_NORMALIZE, "Normalize", 1);
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Cross Product")) CreateNodeOperator(FNODE_CROSSPRODUCT, "Cross Product", 2);
@@ -2242,7 +2264,7 @@ void DrawInterface(void)
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Vector Rejection")) CreateNodeOperator(FNODE_REJECTION, "Vector Rejection", 2);
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Half Direction")) CreateNodeOperator(FNODE_HALFDIRECTION, "Half Direction", 2);
 
-    DrawRightSection("Geometry Data", &layoutRect, 50, 1.45f, 6, 1.85f);
+    DrawRightSection("Geometry Data", &layoutRect, (Vector4){ 50, 1.45f, 6, 1.85f });
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Vertex Position")) CreateNodeUniform(FNODE_VERTEXPOSITION, "Vertex Position", 3);
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Normal Direction")) CreateNodeUniform(FNODE_VERTEXNORMAL, "Normal Direction", 3);
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Vertex Color")) CreateNodeOperator(FNODE_VERTEXCOLOR, "Vertex Color", 1);
@@ -2250,11 +2272,11 @@ void DrawInterface(void)
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Fresnel")) CreateNodeUniform(FNODE_FRESNEL, "Fresnel", 1);
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "MVP Matrix")) CreateNodeUniform(FNODE_MVP, "MVP Matrix", 16);
 
-    DrawRightSection("Math Constants", &layoutRect, 58, 1.25f, 2, 1.05f);
+    DrawRightSection("Math Constants", &layoutRect, (Vector4){ 58, 1.25f, 2, 1.05f });
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "PI")) CreateNodePI();
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "e")) CreateNodeE();
 
-    DrawRightSection("Trigonometry", &layoutRect, 61, 1.72f, 7, 0.3f);
+    DrawRightSection("Trigonometry", &layoutRect, (Vector4){ 61, 1.72f, 7, 0.3f });
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Current Time")) CreateNodeUniform(FNODE_TIME, "Current Time", 1);
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Cosine")) CreateNodeOperator(FNODE_COS, "Cosine", 1);
     if (InterfaceButton(RIGHT_LAYOUT_RECT, "Sine")) CreateNodeOperator(FNODE_SIN, "Sine", 1);
@@ -2298,49 +2320,49 @@ void DrawHelp(void)
 }
 
 // Draw left section rectangle with title and specified paddings
-void DrawLeftSection(const char *sectionName, Rectangle *rectangle, float topPadding, float topPaddingScale, float buttonsCount, float heightPadding)
+void DrawLeftSection(const char *name, Rectangle *rect, Vector4 paddings)
 {
-    rectangle->x = sidebarRect.x + PADDING_MAIN_LEFT;
-    rectangle->y = UI_BUTTON_HEIGHT*topPadding + PADDING_MAIN_TOP*topPaddingScale;
-    rectangle->width = sidebarRect.width - PADDING_MAIN_LEFT*2;
-    rectangle->height = UI_BUTTON_HEIGHT*buttonsCount + PADDING_MAIN_TOP*heightPadding;
+    rect->x = sidebarRect.x + PADDING_MAIN_LEFT;
+    rect->y = UI_BUTTON_HEIGHT*paddings.x + PADDING_MAIN_TOP*paddings.y;
+    rect->width = sidebarRect.width - PADDING_MAIN_LEFT*2;
+    rect->height = UI_BUTTON_HEIGHT*paddings.z + PADDING_MAIN_TOP*paddings.w;
 
-    DrawRectangle(rectangle->x - WIDTH_INTERFACE_BORDER, rectangle->y - WIDTH_INTERFACE_BORDER, rectangle->width + WIDTH_INTERFACE_BORDER*2, rectangle->height + WIDTH_INTERFACE_BORDER*2, COLOR_INTERFACE_BORDER);
-    DrawRectangleRec(*rectangle, COLOR_INTERFACE_SHAPE);
-    DrawRectangle(rectangle->x + PADDING_MAIN_LEFT, rectangle->y - 5, MeasureText(sectionName, 10) + PADDING_MAIN_LEFT, 10, COLOR_INTERFACE_SHAPE);
-    DrawText(sectionName, rectangle->x + PADDING_MAIN_LEFT*1.5f, rectangle->y - 5, 10, COLOR_SECTION_TITLE);
+    DrawRectangle(rect->x - WIDTH_INTERFACE_BORDER, rect->y - WIDTH_INTERFACE_BORDER, rect->width + WIDTH_INTERFACE_BORDER*2, rect->height + WIDTH_INTERFACE_BORDER*2, COLOR_INTERFACE_BORDER);
+    DrawRectangleRec(*rect, COLOR_INTERFACE_SHAPE);
+    DrawRectangle(rect->x + PADDING_MAIN_LEFT, rect->y - 5, MeasureText(name, 10) + PADDING_MAIN_LEFT, 10, COLOR_INTERFACE_SHAPE);
+    DrawText(name, rect->x + PADDING_MAIN_LEFT*1.5f, rect->y - 5, 10, COLOR_SECTION_TITLE);
 
-    ApplySectionPadding(rectangle);
+    ApplySectionPadding(rect);
 }
 
 // Draw right section rectangle with title and specified paddings
-void DrawRightSection(const char *sectionName, Rectangle *rectangle, float topPadding, float topPaddingScale, float buttonsCount, float heightPadding)
+void DrawRightSection(const char *name, Rectangle *rect, Vector4 paddings)
 {
-    rectangle->x = interfaceRect.x + PADDING_MAIN_LEFT;
-    rectangle->y = UI_BUTTON_HEIGHT*topPadding + PADDING_MAIN_TOP*topPaddingScale - menuScroll;
-    rectangle->width = interfaceRect.width - PADDING_MAIN_LEFT*2.95f;
-    rectangle->height = UI_BUTTON_HEIGHT*buttonsCount + PADDING_MAIN_TOP*heightPadding;
+    rect->x = interfaceRect.x + PADDING_MAIN_LEFT;
+    rect->y = UI_BUTTON_HEIGHT*paddings.x + PADDING_MAIN_TOP*paddings.y - menuScroll;
+    rect->width = interfaceRect.width - PADDING_MAIN_LEFT*2.95f;
+    rect->height = UI_BUTTON_HEIGHT*paddings.z + PADDING_MAIN_TOP*paddings.w;
 
-    DrawRectangle(rectangle->x - WIDTH_INTERFACE_BORDER, rectangle->y - WIDTH_INTERFACE_BORDER, rectangle->width + WIDTH_INTERFACE_BORDER*2, rectangle->height + WIDTH_INTERFACE_BORDER*2, COLOR_INTERFACE_BORDER);
-    DrawRectangleRec(*rectangle, COLOR_INTERFACE_SHAPE);
-    DrawRectangle(rectangle->x + rectangle->width - PADDING_MAIN_LEFT*2 - MeasureText(sectionName, 10), rectangle->y - 5, MeasureText(sectionName, 10) + PADDING_MAIN_LEFT, 10, COLOR_INTERFACE_SHAPE);
-    DrawText(sectionName, rectangle->x + rectangle->width - PADDING_MAIN_LEFT*1.5f - MeasureText(sectionName, 10), rectangle->y - 5, 10, COLOR_SECTION_TITLE);
+    DrawRectangle(rect->x - WIDTH_INTERFACE_BORDER, rect->y - WIDTH_INTERFACE_BORDER, rect->width + WIDTH_INTERFACE_BORDER*2, rect->height + WIDTH_INTERFACE_BORDER*2, COLOR_INTERFACE_BORDER);
+    DrawRectangleRec(*rect, COLOR_INTERFACE_SHAPE);
+    DrawRectangle(rect->x + rect->width - PADDING_MAIN_LEFT*2 - MeasureText(name, 10), rect->y - 5, MeasureText(name, 10) + PADDING_MAIN_LEFT, 10, COLOR_INTERFACE_SHAPE);
+    DrawText(name, rect->x + rect->width - PADDING_MAIN_LEFT*1.5f - MeasureText(name, 10), rect->y - 5, 10, COLOR_SECTION_TITLE);
 
-    ApplySectionPadding(rectangle);
+    ApplySectionPadding(rect);
 }
 
 // Applies left-top padding to given rectangle
-void ApplySectionPadding(Rectangle *rectangle)
+void ApplySectionPadding(Rectangle *rect)
 {
-    rectangle->x += PADDING_MAIN_LEFT/2;
-    rectangle->y += PADDING_MAIN_TOP*0.55f;
-    rectangle->width -= PADDING_MAIN_LEFT;
-    rectangle->height = UI_BUTTON_HEIGHT;
+    rect->x += PADDING_MAIN_LEFT/2;
+    rect->y += PADDING_MAIN_TOP*0.55f;
+    rect->width -= PADDING_MAIN_LEFT;
+    rect->height = UI_BUTTON_HEIGHT;
     menuOffset = 0;
 }
 
 // Draw textures section content to drag and drop resources files
-void DrawTexturesPanel(Rectangle sectionRect)
+void DrawTexturesPanel(Rectangle rect)
 {
     menuOffset = 0;
     int menuOffsetY = 0;
@@ -2353,11 +2375,11 @@ void DrawTexturesPanel(Rectangle sectionRect)
         Rectangle dest = (Rectangle){ 0, 0, 0, 0 };
 
         if (rowEnd)
-            dest = (Rectangle){ sectionRect.x + (sectionRect.width/2 + PADDING_MAIN_CENTER/2)*menuOffset, sectionRect.y + (PADDING_MAIN_CENTER + sectionRect.width/2)*menuOffsetY, 
-            sectionRect.width/2 - PADDING_MAIN_CENTER/2, sectionRect.width/2 };
+            dest = (Rectangle){ rect.x + (rect.width/2 + PADDING_MAIN_CENTER/2)*menuOffset, rect.y + (PADDING_MAIN_CENTER + rect.width/2)*menuOffsetY, 
+            rect.width/2 - PADDING_MAIN_CENTER/2, rect.width/2 };
         else
-            dest = (Rectangle){ sectionRect.x + (sectionRect.width/2 + PADDING_MAIN_CENTER/2)*menuOffset, sectionRect.y + 
-            (PADDING_MAIN_CENTER + sectionRect.width/2)*menuOffsetY, sectionRect.width/2 - PADDING_MAIN_CENTER/2, sectionRect.width/2 };
+            dest = (Rectangle){ rect.x + (rect.width/2 + PADDING_MAIN_CENTER/2)*menuOffset, rect.y + 
+            (PADDING_MAIN_CENTER + rect.width/2)*menuOffsetY, rect.width/2 - PADDING_MAIN_CENTER/2, rect.width/2 };
 
         if (!loadedtexRects) texRects[i] = dest;
 
@@ -2536,12 +2558,6 @@ int main(void)
     visorTarget = LoadRenderTexture(screenSize.x/4, screenSize.y/4);
     gridTarget = LoadRenderTexture(screenSize.x, screenSize.y);
     fxaa = LoadShader(FXAA_VERTEX, FXAA_FRAGMENT);
-    textures[0] = LoadTexture(MODEL_TEXTURE_WINDAMOUNT);
-    textures[1] = LoadTexture(MODEL_TEXTURE_DIFFUSE);
-    texPaths[0] = MODEL_TEXTURE_WINDAMOUNT;
-    texPaths[1] = MODEL_TEXTURE_DIFFUSE;
-    model.material.maps[MAP_ALBEDO].texture = textures[0];
-    model.material.maps[MAP_SPECULAR].texture = textures[1];
 
     // Initialize values
     camera = (Camera2D){ (Vector2){ 0, 0 }, (Vector2){ screenSize.x/2, screenSize.y/2 }, 0.0f, 1.0f };
