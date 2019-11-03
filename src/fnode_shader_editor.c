@@ -1,6 +1,6 @@
 /**********************************************************************************************
 *
-*   FNode 1.0 - Visual Scripting Tool To Build GLSL Shaders
+*   FNode 1.1 - Visual Scripting Tool To Build GLSL Shaders
 *
 *   DESCRIPTION:
 *
@@ -27,12 +27,12 @@
 *
 *
 *   Use the following code to compile:
-*   gcc -o $(NAME_PART).exe $(FILE_NAME) -s icon\fnode -lraylib -lpthread -lopengl32 -lgdi32 -std=c99
+*   gcc -o $(NAME_PART).exe $(FILE_NAME) -s icon\fnode_icon -lraylib -lopengl32 -lgdi32 -std=c99
 *
 *
 *   LICENSE: zlib/libpng
 *
-*   Copyright (c) 2016-2018 Victor Fisac
+*   Copyright (c) 2016-2020 Victor Fisac
 *
 *   This software is provided "as-is", without any express or implied warranty. In no event
 *   will the authors be held liable for any damages arising from the use of this software.
@@ -60,6 +60,10 @@
 //----------------------------------------------------------------------------------
 // Defines and Macros
 //----------------------------------------------------------------------------------
+#define     CHAR_SIZE                   512                                         // Shader output max size for text
+#define     MAX_TEXTURES                8                                           // Shader maximum OpenGL texture units
+#define     DEFAULT_PROJECT_TEXTURES    2                                           // Textures to load when loading default project
+#define     COMPILE_DURATION            120                                         // Shader compile result duration
 #define     UI_PADDING                  25                                          // Interface bounds padding with background
 #define     UI_PADDING_SCROLL           0                                           // Interface scroll bar padding
 #define     UI_BUTTON_HEIGHT            30                                          // Interface bounds height
@@ -74,16 +78,14 @@
 #define     EXAMPLE_VERTEX_PATH         "res/example/output/shader.vs"              // Vertex shader output path of start example
 #define     EXAMPLE_FRAGMENT_PATH       "res/example/output/shader.fs"              // Fragment shader output path of start example
 #define     EXAMPLE_DATA_PATH           "res/example/output/shader.fnode"           // Shader data output path of start example
-#define     MAX_TEXTURES                8                                           // Shader maximum OpenGL texture units
-#define     DEFAULT_PROJECT_TEXTURES    2                                           // Textures to load when loading default project
-#define     COMPILE_DURATION            120                                         // Shader compile result duration
 #define     MODEL_PATH                  "res/example/meshes/plant.obj"              // Example model file path
 #define     MODEL_TEXTURE_DIFFUSE       "res/example/textures/plant_color.png"      // Example model color texture file path
 #define     MODEL_TEXTURE_WINDAMOUNT    "res/example/textures/plant_motion.png"     // Example model motion texture file path
 #define     FXAA_VERTEX                 "res/shaders/fxaa.vs"                       // Visor FXAA vertex shader path
 #define     FXAA_FRAGMENT               "res/shaders/fxaa.fs"                       // Visor FXAA fragment shader path
-#define     FXAA_SCREENSIZE_UNIFORM     "viewportSize"                              // Visor FXAA shader screen size uniform location name
 #define     WINDOW_ICON                 "res/fnode_icon.png"                        // FNode icon for window initialization
+
+#define     FXAA_SCREENSIZE_UNIFORM     "viewportSize"                              // Visor FXAA shader screen size uniform location name
 
 #define     LEFT_LAYOUT_RECT            (Rectangle){ layoutRect.x, layoutRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER)*menuOffset, layoutRect.width, UI_BUTTON_HEIGHT }
 #define     RIGHT_LAYOUT_RECT           (Rectangle){ layoutRect.x, layoutRect.y + (UI_BUTTON_HEIGHT + PADDING_MAIN_CENTER)*menuOffset, layoutRect.width, layoutRect.height }
@@ -234,14 +236,17 @@ void CheckPreviousShader(bool makeGraph)
     if (previousShader.id > 0)
     {
         shader = previousShader;
-        model.material.shader = shader;
+        model.materials[0].shader = shader;
         viewUniform = GetShaderLocation(shader, "viewDirection");
         transformUniform = GetShaderLocation(shader, "modelMatrix");
         timeUniformV = GetShaderLocation(shader, "vertCurrentTime");
         timeUniformF = GetShaderLocation(shader, "fragCurrentTime");
 
+        shader.locs[LOC_MAP_ALBEDO] = glGetUniformLocation(shader.id, "texture0");
+        shader.locs[LOC_MAP_NORMAL] = glGetUniformLocation(shader.id, "texture1");
+        shader.locs[LOC_MAP_METALNESS] = glGetUniformLocation(shader.id, "texture2");
         shader.locs[LOC_MAP_ROUGHNESS] = glGetUniformLocation(shader.id, "texture3");
-        shader.locs[LOC_MAP_OCCUSION] = glGetUniformLocation(shader.id, "texture4");
+        shader.locs[LOC_MAP_OCCLUSION] = glGetUniformLocation(shader.id, "texture4");
         shader.locs[LOC_MAP_EMISSION] = glGetUniformLocation(shader.id, "texture5");
         shader.locs[LOC_MAP_HEIGHT] = glGetUniformLocation(shader.id, "texture6");
         shader.locs[LOC_MAP_BRDF] = glGetUniformLocation(shader.id, "texture7");
@@ -391,12 +396,12 @@ void LoadDefaultProject(void)
             {
                 SetTextureFilter(textures[i], FILTER_BILINEAR);
                 texPaths[i] = MODEL_TEXTURE_WINDAMOUNT;
-                model.material.maps[i].texture = textures[i];
+                model.materials[0].maps[i].texture = textures[i];
             }
         }
 
         shader = previousShader;
-        model.material.shader = shader;
+        model.materials[0].shader = shader;
         viewUniform = GetShaderLocation(shader, "viewDirection");
         transformUniform = GetShaderLocation(shader, "modelMatrix");
         timeUniformV = GetShaderLocation(shader, "vertCurrentTime");
@@ -1245,7 +1250,7 @@ void UpdateShaderData(void)
 
                 if (shader.id > 0)
                 {
-                    model.material.maps[index].texture = textures[index];
+                    model.materials[0].maps[index].texture = textures[index];
                     SetTextureFilter(textures[index], FILTER_BILINEAR);
                 }
 
@@ -1256,15 +1261,15 @@ void UpdateShaderData(void)
         else if (CheckModelExtension(droppedFiles[0]) && !loadedModel)
         {
             model = LoadModel(droppedFiles[0]);
-            model.material.shader = shader;
+            model.materials[0].shader = shader;
 
             for (int i = 0; i < MAX_TEXTURES; i++)
             {
                 if (textures[i].id != 0)
                 {
-                    model.material.maps[i].texture = textures[i];
-                    model.material.maps[i].color = WHITE;
-                    model.material.maps[i].value = 1.0f;
+                    model.materials[0].maps[i].texture = textures[i];
+                    model.materials[0].maps[i].color = WHITE;
+                    model.materials[0].maps[i].value = 1.0f;
                 }
             }
 
@@ -1283,7 +1288,7 @@ void UpdateShaderData(void)
             Vector3 viewVector = { camera3d.position.x - camera3d.target.x, camera3d.position.y - camera3d.target.y, camera3d.position.z - camera3d.target.z };
             viewVector = FVector3Normalize(viewVector);
             float viewDir[3] = {  viewVector.x, viewVector.y, viewVector.z };
-            SetShaderValue(shader, viewUniform, viewDir, 3);
+            SetShaderValue(shader, viewUniform, viewDir, UNIFORM_VEC3);
         }
 
         // Check if model transform matrix is used in shader and send it if needed
@@ -1294,7 +1299,7 @@ void UpdateShaderData(void)
         {
             // Convert time value to float array and send it to shader
             float time[1] = { currentTime };
-            SetShaderValue(shader, timeUniformV, time, 1);
+            SetShaderValue(shader, timeUniformV, time, UNIFORM_FLOAT);
         }
  
         // Check if current time is used in fragment shader
@@ -1302,11 +1307,11 @@ void UpdateShaderData(void)
         {
             // Convert time value to float array and send it to shader
             float time[1] = { currentTime };
-            SetShaderValue(shader, timeUniformF, time, 1);
+            SetShaderValue(shader, timeUniformF, time, UNIFORM_FLOAT);
         }
 
         float resolution[2] = { (fullVisor ? screenSize.x : (screenSize.x/4)), (fullVisor ? screenSize.y : (screenSize.y/4)) };
-        SetShaderValue(fxaa, fxaaUniform, resolution, 2);
+        SetShaderValue(fxaa, fxaaUniform, resolution, UNIFORM_VEC2);
     }
 }
 
@@ -1396,7 +1401,7 @@ void CompileShader(void)
     remove(VERTEX_PATH);
     remove(FRAGMENT_PATH);
 
-    model.material.shader = GetShaderDefault();
+    model.materials[0].shader = GetShaderDefault();
     for (int i = 0; i < MAX_TEXTURES; i++) usedUnits[i] = false;
     viewUniform = -1;
     transformUniform = -1;
@@ -1805,7 +1810,7 @@ void CompileNode(FNode node, FILE *file, bool fragment)
                     case FNODE_MVP: strcat(body, "mvp;\n"); break;
                     case FNODE_SAMPLER2D:
                     {
-                        char test[128] = { '\0' };
+                        char test[CHAR_SIZE] = { '\0' };
 
                         int indexA = GetNodeIndex(node->inputs[0]);
                         int indexB = GetNodeIndex(node->inputs[1]);
@@ -1884,7 +1889,7 @@ void CompileNode(FNode node, FILE *file, bool fragment)
             }
             else if (node->type >= FNODE_APPEND)
             {
-                char temp[128] = { '\0' };
+                char temp[CHAR_SIZE] = { '\0' };
                 switch (node->type)
                 {
                     case FNODE_APPEND:
@@ -1939,8 +1944,8 @@ void CompileNode(FNode node, FILE *file, bool fragment)
                     case FNODE_POWER: sprintf(temp, "pow(node_%02i, node_%02i);\n", node->inputs[0], node->inputs[1]); break;
                     case FNODE_STEP: sprintf(temp, "((node_%02i <= node_%02i) ? 1.0 : 0.0);\n", node->inputs[0], node->inputs[1]); break;
                     case FNODE_POSTERIZE: sprintf(temp, "floor(node_%02i*node_%02i)/node_%02i;\n", node->inputs[0], node->inputs[1], node->inputs[1]); break;
-                    case FNODE_MAX: sprintf(temp, "max(node_%02i, node_%02i);\n", node->inputs[0], node->inputs[1], node->inputs[1]); break;
-                    case FNODE_MIN: sprintf(temp, "min(node_%02i, node_%02i);\n", node->inputs[0], node->inputs[1], node->inputs[1]); break;
+                    case FNODE_MAX: sprintf(temp, "max(node_%02i, node_%02i);\n", node->inputs[0], node->inputs[1]); break;
+                    case FNODE_MIN: sprintf(temp, "min(node_%02i, node_%02i);\n", node->inputs[0], node->inputs[1]); break;
                     case FNODE_LERP: sprintf(temp, "mix(node_%02i, node_%02i, node_%02i);\n", node->inputs[0], node->inputs[1], node->inputs[2]); break;
                     case FNODE_SMOOTHSTEP: sprintf(temp, "smoothstep(node_%02i, node_%02i, node_%02i);\n", node->inputs[0], node->inputs[1], node->inputs[2]); break;
                     case FNODE_CROSSPRODUCT: sprintf(temp, "cross(node_%02i, node_%02i);\n", node->inputs[0], node->inputs[1]); break;
@@ -2053,28 +2058,30 @@ void DrawCanvas(void)
 
         BeginTextureMode(gridTarget);
 
+            ClearBackground(RAYWHITE);
+            
             // Draw background title and credits
             DrawText("FNODE 1.0", (screenSize.x - MeasureText("FNODE 1.0", 120))/2, screenSize.y/2 - 60, 120, Fade(LIGHTGRAY, UI_GRID_ALPHA*2));
             DrawText("VICTOR FISAC", (screenSize.x - MeasureText("VICTOR FISAC", 40))/2, screenSize.y*0.65f - 20, 40, Fade(LIGHTGRAY, UI_GRID_ALPHA*2));
 
-            Begin2dMode(camera);
+            BeginMode2D(camera);
 
                 DrawCanvasGrid(UI_GRID_COUNT);
 
-            End2dMode();
+            EndMode2D();
 
         EndTextureMode();
 
         DrawTexturePro(gridTarget.texture, (Rectangle){ 0, 0, gridTarget.texture.width, -gridTarget.texture.height }, (Rectangle){ 0, 0, screenSize.x, screenSize.y }, (Vector2){ 0, 0 }, 0, WHITE);
 
-        Begin2dMode(camera);
+        BeginMode2D(camera);
 
             // Draw all created comments, lines and nodes
             for (int i = 0; i < commentsCount; i++) DrawComment(comments[i]);
             for (int i = 0; i < nodesCount; i++) DrawNode(nodes[i]);
             for (int i = 0; i < linesCount; i++) DrawNodeLine(lines[i]);
 
-        End2dMode();
+        EndMode2D();
 
     EndShaderMode();
 }
@@ -2107,6 +2114,8 @@ void DrawCanvasGrid(int divisions)
 void DrawVisor(void)
 {
     BeginTextureMode(visorTarget);
+    
+        ClearBackground(RAYWHITE);
 
         DrawRectangle(0, 0, screenSize.x, screenSize.y, GRAY);
 
@@ -2114,13 +2123,13 @@ void DrawVisor(void)
         DrawText("FNODE 1.0", (screenSize.x - MeasureText("FNODE 1.0", 120))/2, screenSize.y/2 - 60, 120, Fade(LIGHTGRAY, UI_GRID_ALPHA*2));
         DrawText("VICTOR FISAC", (screenSize.x - MeasureText("VICTOR FISAC", 40))/2, screenSize.y*0.65f - 20, 40, Fade(LIGHTGRAY, UI_GRID_ALPHA*2));
 
-        BeginShaderMode(model.material.shader);
+        BeginShaderMode(model.materials[0].shader);
 
-            Begin3dMode(camera3d);
+            BeginMode3D(camera3d);
 
                 DrawModelEx(model, (Vector3){ 0.0f, -1.0f, 0.0f }, (Vector3){ 0, 1, 0 }, modelRotation, (Vector3){ VISOR_MODEL_SCALE, VISOR_MODEL_SCALE, VISOR_MODEL_SCALE }, WHITE);
 
-            End3dMode();
+            EndMode3D();
 
         EndShaderMode();
 
@@ -2149,7 +2158,7 @@ void DrawVisor(void)
 
 // Draw interface to create nodes
 void DrawInterface(void)
-{
+{   
     DrawHelp();
 
     sidebarRect = (Rectangle){ 0, 0, screenSize.x - canvasSize.x, screenSize.y };
@@ -2191,16 +2200,7 @@ void DrawInterface(void)
         if (InterfaceButton((Rectangle){ layoutRect.x + layoutRect.width - 30, layoutRect.y + 4, 22, 22 }, "X"))
         {
             loadedModel = false;
-            UnloadMesh(&model.mesh);
-
-            for (int i = 0; i < MAX_TEXTURES; i++)
-            {
-                if (texPaths[i] != NULL)
-                {
-                    textures[i] = LoadTexture(texPaths[i]);
-                    SetTextureFilter(textures[i], FILTER_BILINEAR);
-                }
-            }
+            UnloadModel(model);
         }
     }
     else DrawText("DROP MESH HERE", layoutRect.x + MeasureText("DROP MESH HERE", 10)/2 - PADDING_MAIN_LEFT, layoutRect.y + UI_BUTTON_HEIGHT/2 - WIDTH_INTERFACE_BORDER*2 - 2, 10, COLOR_BUTTON_BORDER);
@@ -2549,12 +2549,16 @@ int main(void)
     // Initialization
     //--------------------------------------------------------------------------------------
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
-    InitWindow(screenSize.x, screenSize.y, "FNode - Visual Scripting Tool To Build GLSL Shaders");
+    InitWindow(screenSize.x, screenSize.y, "[fnode] Create shaders with visual scripting");
     iconTex = LoadTexture(WINDOW_ICON);
 
     // Load resources
     model = LoadModel(MODEL_PATH);
-    if (model.mesh.vertexCount > 0) loadedModel = true;
+    MeshTangents(&model.meshes[0]);
+    
+    if (model.meshCount > 0)
+        loadedModel = true;
+    
     visorTarget = LoadRenderTexture(screenSize.x/4, screenSize.y/4);
     gridTarget = LoadRenderTexture(screenSize.x, screenSize.y);
     fxaa = LoadShader(FXAA_VERTEX, FXAA_FRAGMENT);
@@ -2577,7 +2581,6 @@ int main(void)
     UpdateCamera(&camera3d);
 
     SetTargetFPS(60);
-    SetLineWidth(3);
     //--------------------------------------------------------------------------------------
 
     // Main game loop
@@ -2624,7 +2627,8 @@ int main(void)
                 DrawInterface();
             }
 
-            if (drawVisor) DrawVisor();
+            if (drawVisor)
+                DrawVisor();
 
         EndDrawing();
         //----------------------------------------------------------------------------------

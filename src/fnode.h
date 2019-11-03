@@ -207,7 +207,6 @@ FNODEDEF void DestroyNodeLine(FLine line);                                      
 FNODEDEF void DestroyComment(FComment comment);                                      // Destroys a comment
 FNODEDEF void CloseFNode();                                                          // Unitializes FNode global variables
 FNODEDEF void TraceLogFNode(bool error, const char *text, ...);                      // Outputs a trace log message
-FNODEDEF void SetLineWidth(float width);                                             // Sets GL state machine line width
 FNODEDEF int FSearch(char *filename, char *string);                                  // Returns 1 if a specific string is found in a text file
 
 #if defined(__cplusplus)
@@ -2225,12 +2224,6 @@ FNODEDEF void TraceLogFNode(bool error, const char *text, ...)
     fprintf(stdout, "\n");
 
     if (error) exit(1);
-}
-
-// Sets GL state machine line width
-FNODEDEF void SetLineWidth(float width)
-{
-    glLineWidth(width);
 }
 
 // Returns 1 if a specific string is found in a text file
