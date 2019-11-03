@@ -12,7 +12,7 @@ Installation
 FNode requires raylib. To get it, follow the next steps:
 
 * Go to [raylib](https://github.com/raysan5/raylib) and clone the repository.
-* Ensure to pull the changes of tag [v2.0.0](https://github.com/raysan5/raylib/releases/tag/2.0.0).
+* Ensure to pull the last changes from master branch.
 * Use code inside examples header comments to compile and execute.
 
 
