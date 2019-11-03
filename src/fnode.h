@@ -1,10 +1,10 @@
 /**********************************************************************************************
 *
-*   FNode 1.0 - Node based shading library
+*   FNode 1.1 - Node based shading library
 *
 *   LICENSE: zlib/libpng
 *
-*   Copyright (c) 2016-2018 Victor Fisac
+*   Copyright (c) 2016-2020 Victor Fisac
 *
 *   This software is provided "as-is", without any express or implied warranty. In no event
 *   will the authors be held liable for any damages arising from the use of this software.
