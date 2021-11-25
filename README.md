@@ -36,4 +36,4 @@ Screenshots
 
 Thanks to
 ------
-- [raysan5](https://www.github.com/raysan5) for creating a improved interface mock-up.
+- [raysan5](https://www.github.com/raysan5) for creating the new interface design and helping during the development.
